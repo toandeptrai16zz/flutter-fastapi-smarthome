@@ -1,0 +1,3 @@
+# This directory is for the Python virtual environment.
+# It should not be committed to version control.
+# Add 'venv/' to your .gitignore file.
