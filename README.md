@@ -1,152 +1,100 @@
-# ⚡ Hệ Thống Nhà Thông Minh IoT ⚡
+# 🏠 Nhà thông minh IoT - Đồ án AIoT
 
-Dự án IoT điều khiển đèn LED thông qua WiFi, sử dụng Flutter, FastAPI và ESP32/ESP8266.
+## Thông tin đồ án
 
----
-
-### Ý Tưởng Chính
-
-Mục tiêu của dự án là xây dựng một hệ thống IoT hoàn chỉnh, cho phép người dùng điều khiển các thiết bị điện trong nhà từ xa thông qua một ứng dụng di động. Hệ thống được thiết kế để có tốc độ phản hồi nhanh, dễ dàng cài đặt và mở rộng.
-
-### Kiến Trúc Hệ Thống
-
-Luồng dữ liệu của hệ thống được thiết kế theo mô hình Client-Server-Device đơn giản và hiệu quả.
-
-```mermaid
-graph LR
-    A[ App Flutter] -- HTTP Request --> B( FastAPI Server);
-    C[ ESP32/ESP8266] -- HTTP Polling --> B;
-    B -- Cập nhật trạng thái --> C;
-```
-
-1.  **App (Client):** Gửi lệnh điều khiển.
-2.  **Server (Backend):** Nhận lệnh, lưu trạng thái và làm trung gian giao tiếp.
-3.  **ESP (Device):** Liên tục hỏi trạng thái mới từ server và thực thi lệnh (bật/tắt đèn).
-
-### Công Nghệ Sử Dụng
-
-*   **Backend:** Python & FastAPI
-*   **Frontend:** Flutter & Dart
-*   **Firmware:** C++ (Với PlatformIO hoặc Arduino)
-*   **Vi điều khiển:** ESP8266 hoặc ESP32
-
-### Cấu Trúc Dự Án
-```
-IoT_SmartHome_Project/
-│
-├── 📂 client_app/              # Ứng dụng di động Flutter
-│   ├── 📂 lib/
-│   │   ├── 📂 models/          # Định nghĩa object (VD: Device)
-│   │   ├── 📂 screens/         # Màn hình UI (Home, Settings)
-│   │   ├── 📂 services/        # Logic nghiệp vụ (Gọi API)
-│   │   ├── 📂 utils/           # Tiện ích và hằng số
-│   │   ├── 📂 widgets/         # UI Components tái sử dụng
-│   │   └── 📄 main.dart        # Điểm khởi đầu của ứng dụng
-│   └── 📄 pubspec.yaml         # Quản lý thư viện Flutter
-│
-├── 📂 firmware_esp32/          # Firmware cho thiết bị (ESP32/ESP8266)
-│   ├── 📂 src/
-│   │   └── 📄 main.cpp         # Mã nguồn chính (C++)
-│   └── 📄 platformio.ini       # Cấu hình PlatformIO
-│
-└── 📂 server_backend/          # Hệ thống backend Python
-    ├── 📂 app/
-    │   ├── 📂 api/             # Định nghĩa các API endpoints
-    │   ├── 📂 core/            # Cấu hình lõi
-    │   ├── 📂 models/          # Pydantic models
-    │   ├── 📂 services/        # Các dịch vụ logic
-    │   └── 📄 main.py          # Entry point (FastAPI)
-    ├── 📄 requirements.txt     # Danh sách thư viện Python
-    └── 📄 .env                 # Biến môi trường
-```
+- **Sinh viên thực hiện:** Hà Quang Chương
+- **Lớp:** D17DT&KTMT1 - Khóa D17
+- **Ngành:** Công nghệ Kỹ thuật Điện tử Viễn thông
+- **Trường:** Đại học Điện lực (EPU)
+- **Thành phần dự án:** Ứng dụng di động (Client App) cho Hệ thống nhà thông minh AIoT
 
 ---
 
-##  Cài Đặt & Vận Hành
+## 🚀 Báo cáo tiến độ
 
-Thực hiện theo 3 bước dưới đây để khởi chạy toàn bộ hệ thống.
+**Tính đến ngày: 02/01/2026**
 
-### 1. Backend (Server)
-
-Phần bộ não của hệ thống, xử lý các yêu cầu từ ứng dụng.
-
-```bash
-# 1. Đi tới thư mục backend
-cd server_backend
-
-# 2. Tạo và kích hoạt môi trường ảo
-python -m venv venv
-.\venv\Scripts\activate
-
-# 3. Cài đặt các gói cần thiết
-pip install -r requirements.txt
-
-# 4. Khởi chạy server
-uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
-> 💡 Server sẽ chạy tại `http://<IP_CỦA_BẠN>:8000`. Hãy ghi nhớ địa chỉ IP này.
-
-### 2. Firmware (Thiết bị ESP)
-
-Phần cứng để thực thi lệnh bật/tắt đèn.
-
-1.  **Mở thư mục `firmware_esp32`** bằng Visual Studio Code đã cài đặt PlatformIO.
-2.  **Mở file `src/main.cpp`** và chỉnh sửa các thông tin sau:
-    ```cpp
-    // Thay bằng thông tin mạng WiFi của bạn
-    const char* ssid = "TEN_WIFI";
-    const char* password = "MAT_KHAU_WIFI";
-
-    // Thay bằng IP của máy tính đang chạy server ở Bước 1
-    String serverUrl = "http://192.168.1.X:8000/device/status/led_1"; 
-    ```
-3.  **Kết nối bo mạch ESP** vào máy tính.
-4.  Sử dụng PlatformIO để **Build** và **Upload** code vào bo mạch.
-
-### 3. Frontend (Ứng dụng di động)
-
-Giao diện để người dùng tương tác và điều khiển.
-
-1.  **Mở một cửa sổ dòng lệnh mới** và đi tới thư mục ứng dụng:
-    ```bash
-    cd client_app
-    ```
-2.  **Cập nhật địa chỉ IP** của server trong code (thường nằm ở các file trong thư mục `lib/services/` hoặc `lib/utils/`).
-3.  **Tải các gói phụ thuộc:**
-    ```bash
-    flutter pub get
-    ```
-4.  **Chạy ứng dụng** trên máy ảo hoặc thiết bị thật:
-    ```bash
-    flutter run
-    ```
+Ứng dụng client được phát triển bằng **Flutter**, tập trung vào **Giao diện người dùng hiện đại (Modern UI)**, **Trải nghiệm người dùng (UX)** mượt mà và khả năng tương thích đa nền tảng. Hiện tại, giao diện frontend và logic xử lý cục bộ đã **hoàn thiện 100%**.
 
 ---
 
-### Giao Tiếp API
+## ✅ Các tính năng đã hoàn thiện
 
-Hệ thống sử dụng REST API đơn giản để giao tiếp.
+### 🔐 Xác thực & Quản lý người dùng
+- [x] **Màn hình Đăng nhập:** Giao diện hiện đại, hỗ trợ chế độ Dark/Light.
+- [x] **Quên mật khẩu:** Thiết kế theo phong cách Glassmorphism (kính mờ) với hiệu ứng phát sáng.
+- [x] **Đăng nhập mạng xã hội:** Tích hợp giao diện đăng nhập với Google.
+- [x] **Điều hướng:** Logic chuyển đổi mượt mà giữa các màn hình.
 
-*   **Lấy trạng thái thiết bị:**
-    *   **Method:** `GET`
-    *   **URL:** `/device/status/{device_id}`
-    *   **Phản hồi:** `{"device_id": "led_1", "status": true}`
+### 📱 Bảng điều khiển chính
+- [x] **Thanh điều hướng dưới cùng:** Bốn tab truy cập nhanh: Trang chủ, Lịch trình, Thống kê và Cài đặt.
+- [x] **Tab Trang chủ:**
+    - Hiển thị dữ liệu cảm biến môi trường (Nhiệt độ, Độ ẩm).
+    - Lưới thiết bị với trạng thái Bật/Tắt thời gian thực.
+    - **Tương tác:** Chạm để bật/tắt thiết bị, nhấn giữ để mở menu tùy chọn.
+- [x] **Tab Thống kê:** Biểu đồ cột trực quan hóa mức tiêu thụ điện hàng tuần.
+- [x] **Tab Cài đặt:** Tùy chọn chuyển đổi ngôn ngữ (VI/EN) và bật/tắt thông báo.
 
-*   **Cập nhật trạng thái thiết bị:**
-    *   **Method:** `POST`
-    *   **URL:** `/device/update`
-    *   **Body:** `{"device_id": "led_1", "status": false}`
-    *   **Phản hồi:** `{"message": "Update successful"}`
+### ⚙️ Chức năng nâng cao
+- [x] **Tự động hóa & Lịch trình:**
+    - Xem danh sách các tác vụ tự động.
+    - Thêm, sửa và xóa lịch trình thông qua một bottom sheet chuyên nghiệp.
+    - **Thành phần giao diện:** Sử dụng Cupertino Picker (bộ chọn kiểu cuộn của iOS) để chọn thời gian và bộ chọn ngày tùy chỉnh để lặp lại hàng tuần.
+    - **Điều khiển bằng cử chỉ:** Chức năng vuốt để xóa (Dismissible).
+- [x] **Chia sẻ thiết bị:**
+    - Giao diện quản lý thành viên gia đình và quyền truy cập.
+    - **Phân quyền dựa trên vai trò:** Gán các vai trò như Chủ sở hữu (Admin), Điều khiển (Control), hoặc Chỉ xem (View).
+    - Phản hồi trực quan với hiệu ứng "Glow" trên các thiết bị được chia sẻ.
+- [x] **Quản lý giao diện (Theme):**
+    - Đã triển khai đầy đủ chế độ Dark Mode và Light Mode.
+    - Toàn bộ giao diện ứng dụng (nền, chữ, biểu tượng, popup) tự động thay đổi dựa trên cài đặt của người dùng.
 
-### 🗺️ Roadmap
+---
 
-- [ ] Build file APK cho Android
-- [ ] Cấu hình IP tĩnh cho Server
-- [ ] Hỗ trợ điều khiển qua Internet (sử dụng DDNS hoặc VPS)
-- [ ] Cấu hình WiFi cho thiết bị ESP từ ứng dụng (WiFi Provisioning)
-- [ ] Tích hợp điều khiển bằng giọng nói (Google Assistant, Alexa)
+## 🛠 Cấu trúc dự án
 
-### Tác Giả
+Dự án tuân theo một cấu trúc thư mục rõ ràng và có khả năng mở rộng để tách biệt các thành phần (Giao diện, logic và dịch vụ).
 
-*   **Hà Quang Chương** (chuongdev)
-*   *Sinh viên Khoa Điện tử Viễn thông - Đại học Điện Lực (EPU).*
+```
+lib/
+├── main.dart                 # Điểm khởi đầu của ứng dụng
+├── theme/
+│   └── app_theme.dart        # Quản lý giao diện và màu sắc (Dark/Light)
+├── screens/
+│   ├── auth/
+│   │   ├── login_screen.dart           # Giao diện Đăng nhập
+│   │   └── forgot_password_screen.dart # Giao diện Quên mật khẩu
+│   ├── home/
+│   │   └── dashboard_screen.dart       # Màn hình chính điều phối các tab
+│   ├── automation/
+│   │   └── schedule_screen.dart        # Quản lý lịch trình (Thêm/Sửa/Xóa)
+│   └── device/
+│       └── share_device_screen.dart    # Giao diện chia sẻ thiết bị
+└── ... (Các thư mục khác cho models, services, widgets)
+```
+
+---
+
+## 📸 Điểm nổi bật
+
+| Tính năng             | Trạng thái      | Phong cách / Tương tác chính    |
+|-----------------------|-----------------|---------------------------------|
+| **Màn hình Đăng nhập**| Đã hoàn thiện   | Phong cách Glassmorphism        |
+| **Bảng điều khiển**   | Đã hoàn thiện   | Tương tác nhấn giữ (Long Press) |
+| **Màn hình Tự động hóa**| Đã hoàn thiện   | Bộ chọn thời gian kiểu iOS      |
+| **Chia sẻ thiết bị**  | Đã hoàn thiện   | Phân quyền dựa trên vai trò     |
+
+---
+
+## 📝 Kế hoạch tiếp theo
+
+- **Phát triển Backend (Server Python):**
+    - Xây dựng API server bằng Flask hoặc FastAPI.
+    - Tích hợp cơ sở dữ liệu để quản lý người dùng và trạng thái thiết bị.
+- **Tích hợp phần cứng IoT:**
+    - Lập trình vi điều khiển ESP32/ESP8266.
+    - Thiết lập giao tiếp bằng MQTT hoặc WebSockets.
+- **Đồng bộ hóa thời gian thực:**
+    - Triển khai cập nhật trạng thái thời gian thực giữa ứng dụng di động và thiết bị IoT.
+
+> "Dự án đang trong quá trình phát triển. Các tính năng và giao diện có thể thay đổi trong các phiên bản tương lai."
