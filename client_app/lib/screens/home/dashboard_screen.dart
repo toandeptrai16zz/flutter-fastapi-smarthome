@@ -3,6 +3,7 @@ import '../../theme/app_theme.dart';
 import '../auth/login_screen.dart';
 import '../automation/schedule_screen.dart'; 
 import '../device/share_device_screen.dart'; 
+import '../../services/api_service.dart'; // Import API Service
 
 // Dữ liệu từ điển đa ngôn ngữ
 final Map<String, Map<String, String>> _appData = {
@@ -93,9 +94,45 @@ class _HomeTab extends StatefulWidget {
 }
 
 class _HomeTabState extends State<_HomeTab> {
+  bool isLoading = true;
   Map<String, bool> deviceStates = {
-    "Smart AC": true, "Smart Light": true, "Front Door": true, "Sensor Hub": false,
+    "Smart AC": false, "Smart Light": false, "Front Door": true, "Sensor Hub": false,
   };
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDeviceStates();
+  }
+
+  void _loadDeviceStates() async {
+    bool acStatus = await ApiService.getStatus("led_1");
+    bool lightStatus = await ApiService.getStatus("led_2");
+    if (mounted) {
+      setState(() {
+        deviceStates["Smart AC"] = acStatus;
+        deviceStates["Smart Light"] = lightStatus;
+        isLoading = false;
+      });
+    }
+  }
+
+  void _toggleDevice(String key, bool newState) async {
+    setState(() => deviceStates[key] = newState); // Đổi UI ngay cho mượt
+    
+    // Map giao diện ảo với DeviceID trên Backend thật
+    String deviceId = "";
+    if (key == "Smart AC") deviceId = "led_1";
+    if (key == "Smart Light") deviceId = "led_2";
+    
+    if (deviceId.isNotEmpty) {
+      bool success = await ApiService.toggleDevice(deviceId, newState);
+      if (!success && mounted) {
+        setState(() => deviceStates[key] = !newState); // Rollback nếu mạng lỗi
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Lỗi! Không bật tắt được.")));
+      }
+    }
+  }
 
   void _showAddDeviceDialog() {
     TextEditingController nameController = TextEditingController();
@@ -160,8 +197,8 @@ class _HomeTabState extends State<_HomeTab> {
           GridView.count(
             shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), crossAxisCount: 2, childAspectRatio: 0.85, mainAxisSpacing: 16, crossAxisSpacing: 16,
             children: [
-              _buildDeviceCard("Smart AC", "Living Room", Icons.ac_unit, deviceStates["Smart AC"]!, Colors.blue, "Smart AC"),
-              _buildDeviceCard("Smart Light", "Bedroom", Icons.lightbulb, deviceStates["Smart Light"]!, Colors.yellow, "Smart Light"),
+              _buildDeviceCard("Đèn Phòng Khách", "Phòng Khách", Icons.lightbulb, deviceStates["Smart AC"]!, Colors.orange, "Smart AC"),
+              _buildDeviceCard("Đèn Phòng Ngủ", "Phòng Ngủ", Icons.bed, deviceStates["Smart Light"]!, Colors.yellow, "Smart Light"),
               _buildDeviceCard("Front Door", "Entrance", Icons.lock, deviceStates["Front Door"]!, widget.theme.primary, "Front Door"),
               _buildDeviceCard("Sensor Hub", "Kitchen", Icons.sensors_off, false, Colors.grey, "Sensor Hub"),
             ],
@@ -181,7 +218,7 @@ class _HomeTabState extends State<_HomeTab> {
 
   Widget _buildDeviceCard(String name, String room, IconData icon, bool isOn, Color color, String key) {
     return GestureDetector(
-      onTap: () => setState(() => deviceStates[key] = !deviceStates[key]!),
+      onTap: () => _toggleDevice(key, !isOn),
       onLongPress: () {
         showModalBottomSheet(
           context: context,
@@ -228,7 +265,7 @@ class _HomeTabState extends State<_HomeTab> {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(color: widget.theme.surface, borderRadius: BorderRadius.circular(20), border: Border.all(color: isOn ? color.withOpacity(0.5) : Colors.transparent, width: 2), boxShadow: widget.theme.isDark ? [] : [BoxShadow(color: Colors.black12, blurRadius: 10, offset: const Offset(0, 5))]),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Icon(icon, color: isOn ? color : Colors.grey, size: 30), Switch(value: isOn, onChanged: (v) => setState(() => deviceStates[key] = v), activeColor: color)]),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Icon(icon, color: isOn ? color : Colors.grey, size: 30), Switch(value: isOn, onChanged: (v) => _toggleDevice(key, v), activeColor: color)]),
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(name, style: TextStyle(color: widget.theme.textMain, fontWeight: FontWeight.bold, fontSize: 16)), Text(room, style: TextStyle(color: widget.theme.textSub, fontSize: 12)), const SizedBox(height: 4), Text(isOn ? "On" : "Off", style: TextStyle(color: isOn ? color : Colors.grey, fontWeight: FontWeight.bold))])
         ]),
       ),

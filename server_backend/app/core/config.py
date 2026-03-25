@@ -1,6 +1,15 @@
-# System configurations (IP, Port, MQTT Host)
 import os
+from pydantic_settings import BaseSettings
 
-SERVER_HOST = os.getenv("SERVER_HOST", "127.0.0.1")
-SERVER_PORT = int(os.getenv("SERVER_PORT", "8000"))
-MQTT_BROKER_HOST = os.getenv("MQTT_BROKER_HOST", "mqtt.eclipse.org")
+class Settings(BaseSettings):
+    MONGODB_URL: str = "mongodb://localhost:27017"
+    MONGODB_DB_NAME: str = "smarthome_db"
+    MQTT_BROKER_URL: str = "broker.hivemq.com"
+    MQTT_BROKER_PORT: int = 1883
+    MQTT_USERNAME: str = ""
+    MQTT_PASSWORD: str = ""
+
+    class Config:
+        env_file = ".env"
+
+settings = Settings()

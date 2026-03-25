@@ -1,14 +1,20 @@
-# Database connection (e.g., SQLite)
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from motor.motor_asyncio import AsyncIOMotorClient
+from app.core.config import settings
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./sql_app.db"
-# SQLALCHEMY_DATABASE_URL = "postgresql://user:password@postgresserver/db"
+class Database:
+    client: AsyncIOMotorClient = None
+    db = None
 
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+db = Database()
 
-Base = declarative_base()
+async def connect_to_mongo():
+    print(f"Connecting to MongoDB at {settings.MONGODB_URL}...")
+    db.client = AsyncIOMotorClient(settings.MONGODB_URL)
+    db.db = db.client[settings.MONGODB_DB_NAME]
+    print("Connected to MongoDB!")
+
+async def close_mongo_connection():
+    print("Closing MongoDB connection...")
+    if db.client:
+        db.client.close()
+    print("MongoDB connection closed!")
