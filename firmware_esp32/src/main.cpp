@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
+#include <DHT.h>
 
 // --- WIFI ---
 const char *ssid = "538DC0 101 102";
@@ -9,6 +10,11 @@ const char *password = "0989533806";
 // --- MQTT ---
 const char *mqtt_server = "broker.hivemq.com";
 const int mqtt_port = 1883;
+
+// --- CẢM BIẾN DHT11 ---
+#define DHTPIN D1      // Cắm chân DATA của DHT11 vào D1
+#define DHTTYPE DHT11  // Có thể đổi thành DHT22 nếu bạn dùng loại khác
+DHT dht(DHTPIN, DHTTYPE);
 
 // --- LED ---
 #define LED1_PIN D2
@@ -89,12 +95,16 @@ void setup() {
 
   pinMode(LED1_PIN, OUTPUT);
   pinMode(LED2_PIN, OUTPUT);
+  
+  dht.begin(); // Khởi động cảm biến DHT
 
   setup_wifi();
 
   client.setServer(mqtt_server, mqtt_port);
   client.setCallback(callback);
 }
+
+unsigned long lastSensorTime = 0;
 
 void loop() {
   if (WiFi.status() != WL_CONNECTED) {
@@ -105,4 +115,25 @@ void loop() {
     reconnect();
   }
   client.loop();
+
+  // ----- ĐỌC VÀ GỬI DỮ LIỆU CẢM BIẾN (Mỗi 5 giây) -----
+  unsigned long now = millis();
+  if (now - lastSensorTime > 5000) {
+    lastSensorTime = now;
+    
+    // Đọc cảm biến thật
+    float h = dht.readHumidity();
+    float t = dht.readTemperature();
+
+    // Kiểm tra nếu lỗi đọc cảm biến
+    if (isnan(h) || isnan(t)) {
+      Serial.println("❌ Lỗi đọc dữ liệu từ cảm biến DHT!");
+      return;
+    }
+
+    String payload = "{\"temperature\": " + String(t, 1) + ", \"humidity\": " + String(h, 1) + "}";
+    if (client.publish("smarthome/sensors/dht11/data", payload.c_str())) {
+      Serial.println("📤 Published DHT: " + payload);
+    }
+  }
 }

@@ -8,11 +8,12 @@ class MQTTService:
         self.client = None
         self.task = None
         self.connected = False
+        self.loop = None  # Giữ luồng chính
 
     async def start(self):
         print(f"Connecting to MQTT Broker at {settings.MQTT_BROKER_URL}:{settings.MQTT_BROKER_PORT}...")
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, self._connect_sync)
+        self.loop = asyncio.get_event_loop()
+        await self.loop.run_in_executor(None, self._connect_sync)
 
     def _connect_sync(self):
         try:
@@ -33,13 +34,45 @@ class MQTTService:
         if rc == 0:
             self.connected = True
             print("✅ Connected to MQTT Broker!")
+            # Subscribe 2 loại topic: lệnh cho thiết bị (status) và dữ liệu cảm biến (data)
             client.subscribe("smarthome/devices/+/status")
+            client.subscribe("smarthome/sensors/+/data")
         else:
             print(f"MQTT connect failed, rc={rc}")
             self.connected = False
 
     def _on_message(self, client, userdata, msg):
-        print(f"📥 Received: {msg.topic} = {msg.payload.decode()}")
+        topic = msg.topic
+        payload = msg.payload.decode()
+        print(f"📥 Received: {topic} = {payload}")
+        
+        # Nếu nhận dữ liệu từ cảm biến
+        if topic.startswith("smarthome/sensors/"):
+            import json
+            from datetime import datetime
+            from app.core.database import db
+            try:
+                data = json.loads(payload)
+                sensor_id = topic.split("/")[2]
+                
+                # Hàm async để thực thi bằng asyncio loop
+                async def save_sensor():
+                    if db.db is not None:
+                        await db.db["sensors"].insert_one({
+                            "device_id": sensor_id,
+                            "temperature": data.get("temperature", 0.0),
+                            "humidity": data.get("humidity", 0.0),
+                            "timestamp": datetime.utcnow()
+                        })
+                        print(f"✅ Lưu DB thành công cảm biến {sensor_id}: {data}")
+
+                # Chạy task vào luồng chính an toàn từ thread mạng
+                if self.loop is not None and self.loop.is_running():
+                    asyncio.run_coroutine_threadsafe(save_sensor(), self.loop)
+                else:
+                    print("⚠️ Event loop chưa sẵn sàng, bỏ qua lưu DB")
+            except Exception as e:
+                print(f"❌ Lỗi xử lý data cảm biến: {e}")
 
     async def publish(self, topic: str, payload: str):
         if not self.client or not self.connected:

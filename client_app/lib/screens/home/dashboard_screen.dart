@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async'; // Bổ sung thư viện cho Timer
 import '../../theme/app_theme.dart';
 import '../auth/login_screen.dart';
 import '../automation/schedule_screen.dart'; 
@@ -95,6 +96,10 @@ class _HomeTab extends StatefulWidget {
 
 class _HomeTabState extends State<_HomeTab> {
   bool isLoading = true;
+  String currentTemp = "--";
+  String currentHum = "--";
+  Timer? _sensorTimer;
+
   Map<String, bool> deviceStates = {
     "Smart AC": false, "Smart Light": false, "Front Door": true, "Sensor Hub": false,
   };
@@ -103,11 +108,45 @@ class _HomeTabState extends State<_HomeTab> {
   void initState() {
     super.initState();
     _loadDeviceStates();
+    // Auto refresh cả cảm biến lẫn trạng thái thiết bị mỗi 5 giây
+    _sensorTimer = Timer.periodic(const Duration(seconds: 5), (_) => _refreshAll());
+  }
+
+  @override
+  void dispose() {
+    _sensorTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadSensorData() async {
+    var sensorData = await ApiService.getSensorData();
+    if (mounted && sensorData != null) {
+      setState(() {
+        currentTemp = sensorData['temperature']?.toString() ?? "--";
+        currentHum = sensorData['humidity']?.toString() ?? "--";
+      });
+    }
+  }
+
+  Future<void> _refreshAll() async {
+    // Refresh cảm biến nhiệt độ/độ ẩm
+    await _loadSensorData();
+    // Đồng thời refresh trạng thái thiết bị để đồng bộ với Scheduler
+    bool acStatus = await ApiService.getStatus("led_1");
+    bool lightStatus = await ApiService.getStatus("led_2");
+    if (mounted) {
+      setState(() {
+        deviceStates["Smart AC"] = acStatus;
+        deviceStates["Smart Light"] = lightStatus;
+      });
+    }
   }
 
   void _loadDeviceStates() async {
     bool acStatus = await ApiService.getStatus("led_1");
     bool lightStatus = await ApiService.getStatus("led_2");
+    await _loadSensorData(); // Load sensor ngay lần đầu
+
     if (mounted) {
       setState(() {
         deviceStates["Smart AC"] = acStatus;
@@ -190,7 +229,7 @@ class _HomeTabState extends State<_HomeTab> {
               GestureDetector(onTap: _showAddDeviceDialog, child: CircleAvatar(backgroundColor: widget.theme.surface, child: Icon(Icons.add, color: widget.theme.primary))),
           ]),
           const SizedBox(height: 24),
-          Row(children: [Expanded(child: _buildEnvCard(widget.tr('temp'), "24", "°C", Icons.thermostat, Colors.orange)), const SizedBox(width: 16), Expanded(child: _buildEnvCard(widget.tr('hum'), "45", "%", Icons.water_drop, Colors.blue))]),
+          Row(children: [Expanded(child: _buildEnvCard(widget.tr('temp'), currentTemp, "°C", Icons.thermostat, Colors.orange)), const SizedBox(width: 16), Expanded(child: _buildEnvCard(widget.tr('hum'), currentHum, "%", Icons.water_drop, Colors.blue))]),
           const SizedBox(height: 24),
           Text(widget.tr('my_devices'), style: TextStyle(color: widget.theme.textMain, fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
