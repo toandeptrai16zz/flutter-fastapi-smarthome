@@ -101,4 +101,23 @@ class ApiService {
     }
     return false;
   }
+
+  // --- TRỢ LÝ AI ---
+  // Gửi lệnh giọng nói dạng text lên Backend
+  static Future<Map<String, dynamic>?> sendVoiceCommand(String text) async {
+    try {
+      final response = await http.post(
+        Uri.parse('${Constants.baseUrl}/ai/chat'),
+        headers: {"Content-Type": "application/json; charset=UTF-8"},
+        body: jsonEncode({"message": text}),
+      ).timeout(const Duration(seconds: 10)); // AI có thể phản hồi chậm 1-2s
+      
+      if (response.statusCode == 200) {
+        return jsonDecode(utf8.decode(response.bodyBytes));
+      }
+    } catch (e) {
+      print("Lỗi AI Chat: $e");
+    }
+    return null;
+  }
 }

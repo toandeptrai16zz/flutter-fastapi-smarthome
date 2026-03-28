@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'dart:async'; // Bổ sung thư viện cho Timer
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:flutter_tts/flutter_tts.dart';
 import '../../theme/app_theme.dart';
 import '../auth/login_screen.dart';
 import '../automation/schedule_screen.dart'; 
 import '../device/share_device_screen.dart'; 
 import '../../services/api_service.dart'; // Import API Service
+import '../../services/websocket_service.dart'; // Import WebSocket Realtime
 
 // Dữ liệu từ điển đa ngôn ngữ
 final Map<String, Map<String, String>> _appData = {
@@ -50,6 +53,125 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _toggleTheme(bool isDark) => setState(() => _isDarkMode = isDark);
   String tr(String key) => _appData[_currentLang]?[key] ?? key;
 
+  // --- AI VOICE ASSISTANT STATE ---
+  late stt.SpeechToText _speech;
+  late FlutterTts _flutterTts;
+  bool _isListening = false;
+  String _spokenText = "";
+  String _aiReply = "";
+  bool _isProcessingAI = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _speech = stt.SpeechToText();
+    _flutterTts = FlutterTts();
+    _initTts();
+  }
+
+  void _initTts() async {
+    await _flutterTts.setLanguage("vi-VN");
+    await _flutterTts.setSpeechRate(0.5);
+    await _flutterTts.setVolume(1.0);
+    await _flutterTts.setPitch(1.1); // Giọng trầm bổng nhẹ
+  }
+
+  void _listen() async {
+    if (!_isListening) {
+      bool available = await _speech.initialize(
+        onStatus: (val) {
+          if (val == 'done' || val == 'notListening') {
+            setState(() => _isListening = false);
+            if (_spokenText.isNotEmpty && !_isProcessingAI) {
+              _processVoiceCommand(_spokenText);
+            }
+          }
+        },
+        onError: (val) => setState(() => _isListening = false),
+      );
+      if (available) {
+        setState(() {
+          _isListening = true;
+          _spokenText = "";
+          _aiReply = "";
+        });
+        _speech.listen(
+          onResult: (val) => setState(() {
+            _spokenText = val.recognizedWords;
+          }),
+          localeId: "vi_VN",
+        );
+      }
+    } else {
+      setState(() => _isListening = false);
+      _speech.stop();
+    }
+  }
+
+  Future<void> _processVoiceCommand(String text) async {
+    setState(() {
+      _isProcessingAI = true;
+      _aiReply = "Đang xử lý...";
+      _spokenText = text; // Hiển thị text người dùng đã gõ hoặc nói
+    });
+    
+    // Gửi Voice text lên Backend AI
+    var result = await ApiService.sendVoiceCommand(text);
+    
+    if (result != null && result.containsKey('reply')) {
+      setState(() {
+        _aiReply = result['reply'];
+        _isProcessingAI = false;
+        _spokenText = ""; // Reset text sau khi xong
+      });
+      await _flutterTts.speak(result['reply']);
+    } else {
+      setState(() {
+        _aiReply = "Xin lỗi, tổng đài AI đang bận.";
+        _isProcessingAI = false;
+      });
+      await _flutterTts.speak("Xin lỗi, tổng đài AI đang bận.");
+    }
+  }
+  
+  // Tính năng ẩn (Gõ chữ) dự phòng cho máy ảo bị hỏng Micro
+  void _showTextCommandDialog() {
+    TextEditingController _textController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Gõ lệnh giả giọng nói"),
+          content: TextField(
+            controller: _textController,
+            decoration: const InputDecoration(hintText: "Ví dụ: bật đèn phòng ngủ"),
+            autofocus: true,
+            onSubmitted: (text) {
+              Navigator.pop(context);
+              if (text.isNotEmpty) _processVoiceCommand(text);
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Hủy"),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                if (_textController.text.isNotEmpty) {
+                  _processVoiceCommand(_textController.text);
+                }
+              },
+              child: const Text("Gửi đi"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+  // ---------------------------------
+
   @override
   Widget build(BuildContext context) {
     final themeColors = AppThemeColors(_isDarkMode);
@@ -79,6 +201,66 @@ class _DashboardScreenState extends State<DashboardScreen> {
           BottomNavigationBarItem(icon: const Icon(Icons.settings), label: tr('nav_settings')),
         ],
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      floatingActionButton: _selectedIndex == 0 ? FloatingActionButton(
+        heroTag: "ai_mic_btn", // Tránh lỗi crash Hero tag duplicate
+        onPressed: _showTextCommandDialog, // Ấn 1 lần để gõ chữ thay vì nói
+        backgroundColor: Colors.transparent,
+        elevation: _isListening ? 15 : 5,
+        child: GestureDetector(
+          onLongPress: _listen,
+          onLongPressUp: () {
+              if (_isListening) {
+                  _speech.stop();
+                  setState(() => _isListening = false);
+              }
+          },
+          child: Container(
+            width: 65, height: 65,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: _isListening || _isProcessingAI 
+                    ? [Colors.purple, Colors.pink] 
+                    : [themeColors.primary, Colors.lightBlue]
+              ),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(_isProcessingAI ? Icons.hourglass_top : Icons.mic, color: Colors.white, size: 28),
+                if (_isListening) const Text("Nói", style: TextStyle(color: Colors.white, fontSize: 8)),
+              ],
+            ),
+          ),
+        ),
+      ) : null,
+      bottomSheet: _aiReply.isNotEmpty || _spokenText.isNotEmpty ? Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+        decoration: BoxDecoration(
+          color: themeColors.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, -5))]
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (_spokenText.isNotEmpty)
+              Text("Bạn: \"$_spokenText\"", style: TextStyle(color: themeColors.textSub, fontStyle: FontStyle.italic)),
+            if (_aiReply.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text("Nhà: $_aiReply", style: TextStyle(color: themeColors.primary, fontWeight: FontWeight.bold, fontSize: 16)),
+              ),
+            const SizedBox(height: 10),
+            Align(
+               alignment: Alignment.centerRight,
+               child: TextButton(onPressed: () => setState(() { _aiReply = ""; _spokenText = ""; }), child: const Text("Đóng"))
+            )
+          ],
+        ),
+      ) : null,
     );
   }
 }
@@ -98,7 +280,7 @@ class _HomeTabState extends State<_HomeTab> {
   bool isLoading = true;
   String currentTemp = "--";
   String currentHum = "--";
-  Timer? _sensorTimer;
+  StreamSubscription? _wsSubscription; // WebSocket listener thay thế Timer
 
   Map<String, bool> deviceStates = {
     "Smart AC": false, "Smart Light": false, "Front Door": true, "Sensor Hub": false,
@@ -107,50 +289,74 @@ class _HomeTabState extends State<_HomeTab> {
   @override
   void initState() {
     super.initState();
-    _loadDeviceStates();
-    // Auto refresh cả cảm biến lẫn trạng thái thiết bị mỗi 5 giây
-    _sensorTimer = Timer.periodic(const Duration(seconds: 5), (_) => _refreshAll());
+    _loadDeviceStates(); // Load lần đầu qua REST để có dữ liệu ngay
+    _connectWebSocket(); // Sau đó lắng nghe realtime qua WS
+  }
+
+  void _connectWebSocket() {
+    final ws = WebSocketService();
+    ws.connect();
+    _wsSubscription = ws.stream.listen((data) {
+      if (!mounted) return;
+      final type = data['type'] as String?;
+      if (type == 'sensor') {
+        // Cập nhật nhiệt độ/độ ẩm realtime
+        setState(() {
+          currentTemp = data['temperature']?.toString() ?? currentTemp;
+          currentHum = data['humidity']?.toString() ?? currentHum;
+        });
+      } else if (type == 'device_update') {
+        // Trạng thái relay cập nhật từ lệnh toggle hoặc AI
+        final deviceId = data['device_id'] as String?;
+        final status = data['status'] as bool? ?? false;
+        setState(() {
+          if (deviceId == 'led_1') deviceStates["Smart AC"] = status;
+          if (deviceId == 'led_2') deviceStates["Smart Light"] = status;
+        });
+      } else if (type == 'esp32_status') {
+        // Trạng thái thống báo trực tiếp từ phần cứng ESP32
+        setState(() {
+          deviceStates["Smart AC"] = data['relay1'] as bool? ?? false;
+          deviceStates["Smart Light"] = data['relay2'] as bool? ?? false;
+        });
+      } else if (type == 'init') {
+        // Snapshot ban đầu khi vừa kết nối WS
+        final sensor = data['sensor'] as Map<String, dynamic>?;
+        if (sensor != null) {
+          currentTemp = sensor['temperature']?.toString() ?? currentTemp;
+          currentHum = sensor['humidity']?.toString() ?? currentHum;
+        }
+        final devices = data['devices'] as List<dynamic>?;
+        if (devices != null) {
+          for (final d in devices) {
+            if (d['device_id'] == 'led_1') deviceStates["Smart AC"] = d['status'] as bool? ?? false;
+            if (d['device_id'] == 'led_2') deviceStates["Smart Light"] = d['status'] as bool? ?? false;
+          }
+        }
+        setState(() { isLoading = false; });
+      }
+    });
   }
 
   @override
   void dispose() {
-    _sensorTimer?.cancel();
+    _wsSubscription?.cancel();
     super.dispose();
-  }
-
-  Future<void> _loadSensorData() async {
-    var sensorData = await ApiService.getSensorData();
-    if (mounted && sensorData != null) {
-      setState(() {
-        currentTemp = sensorData['temperature']?.toString() ?? "--";
-        currentHum = sensorData['humidity']?.toString() ?? "--";
-      });
-    }
-  }
-
-  Future<void> _refreshAll() async {
-    // Refresh cảm biến nhiệt độ/độ ẩm
-    await _loadSensorData();
-    // Đồng thời refresh trạng thái thiết bị để đồng bộ với Scheduler
-    bool acStatus = await ApiService.getStatus("led_1");
-    bool lightStatus = await ApiService.getStatus("led_2");
-    if (mounted) {
-      setState(() {
-        deviceStates["Smart AC"] = acStatus;
-        deviceStates["Smart Light"] = lightStatus;
-      });
-    }
   }
 
   void _loadDeviceStates() async {
     bool acStatus = await ApiService.getStatus("led_1");
     bool lightStatus = await ApiService.getStatus("led_2");
-    await _loadSensorData(); // Load sensor ngay lần đầu
+    var sensorData = await ApiService.getSensorData();
 
     if (mounted) {
       setState(() {
         deviceStates["Smart AC"] = acStatus;
         deviceStates["Smart Light"] = lightStatus;
+        if (sensorData != null) {
+          currentTemp = sensorData['temperature']?.toString() ?? "--";
+          currentHum = sensorData['humidity']?.toString() ?? "--";
+        }
         isLoading = false;
       });
     }

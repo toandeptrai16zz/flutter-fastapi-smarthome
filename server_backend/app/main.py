@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Body
+from fastapi import FastAPI, HTTPException, Body, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from typing import List
@@ -6,10 +6,18 @@ from datetime import datetime
 import sys
 import asyncio
 from bson import ObjectId
+from pydantic import BaseModel
 from app.models.schedule import ScheduleCreate
+from app.core.config import settings
+import json
+import google.generativeai as genai
 
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+# Import WebSocket Manager từ file riêng (tránh circular import)
+from app.services.websocket_manager import ws_manager
+
+class ChatRequest(BaseModel):
+    message: str
+
 
 from app.core.database import connect_to_mongo, close_mongo_connection, db
 from app.services.mqtt_service import mqtt
@@ -90,6 +98,40 @@ def read_root():
     return {"message": "IoT SmartHome Server - MongoDB + MQTT!"}
 
 
+# ═══════════════════════════════════════════════════════════
+# WEBSOCKET ENDPOINT - Cho phép Flutter kết nối Realtime
+# ═══════════════════════════════════════════════════════════
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    print(f"📡 New WS connection request from {websocket.client}")
+    await ws_manager.connect(websocket)
+    try:
+        # Gửi snapshot trạng thái hiện tại ngay khi kết nối
+        if db.db is not None:
+            devices = await db.db["devices"].find({}, {"_id": 0}).to_list(100)
+            sensor = await db.db["sensors"].find_one({}, {"_id": 0}, sort=[("timestamp", -1)])
+            await websocket.send_text(json.dumps({
+                "type": "init",
+                "devices": devices,
+                "sensor": {
+                    "temperature": sensor.get("temperature", 0.0) if sensor else 0.0,
+                    "humidity": sensor.get("humidity", 0.0) if sensor else 0.0
+                }
+            }, ensure_ascii=False, default=str))
+        
+        while True:
+            # Nhận message từ client (nếu có)
+            data = await websocket.receive_text()
+            # Trả lời pong để giữ connection
+            await websocket.send_text(json.dumps({"type": "pong"}))
+            
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket)
+    except Exception as e:
+        print(f"❌ WS Error: {e}")
+        ws_manager.disconnect(websocket)
+
+
 @app.get("/devices")
 async def get_all_devices():
     collection = db.db["devices"]
@@ -160,6 +202,14 @@ async def update_device_status(data: dict = Body(...)):
     success = await mqtt.publish(f"smarthome/devices/{device_id}/control", payload)
 
     updated = await collection.find_one({"device_id": device_id}, {"_id": 0})
+    
+    # 🔴 Broadcast realtime tới tất cả Flutter clients qua WebSocket
+    await ws_manager.broadcast({
+        "type": "device_update",
+        "device_id": device_id,
+        "status": bool(status)
+    })
+
     if not success:
         return {"message": "Cập nhật DB OK nhưng lỗi gửi lệnh tới thiết bị!", "data": updated}
 
@@ -236,3 +286,67 @@ async def toggle_schedule(schedule_id: str):
     new_status = not item.get("is_active", True)
     await collection.update_one({"_id": ObjectId(schedule_id)}, {"$set": {"is_active": new_status}})
     return {"message": "Đã đổi trạng thái", "is_active": new_status}
+
+# --- TRỢ LÝ AI (GEMINI) ---
+@app.post("/ai/chat")
+async def ai_chat(req: ChatRequest):
+    """Trợ lý ảo xử lý ra lệnh bằng giọng nói (Text)"""
+    if not settings.GEMINI_API_KEY:
+        return {"reply": "Chưa cài đặt API Key cho AI.", "device_id": "none", "action": False}
+    
+    genai.configure(api_key=settings.GEMINI_API_KEY)
+    # Dùng gemini-2.5-flash cho tốc độ phản hồi cực nhanh -> tối ưu trải nghiệm Assistant
+    model = genai.GenerativeModel('gemini-2.5-flash')
+    
+    prompt = f"""Bạn là một trợ lý ảo quản lý nhà thông minh tên là "Nhà".
+Người dùng vừa ra lệnh: "{req.message}"
+
+Dưới đây là danh sách thiết bị bạn có thể điều khiển:
+- "led_1": Đèn Phòng Khách
+- "led_2": Đèn Phòng Ngủ
+Bạn phải chọn hành động là `true` (BẬT) hoặc `false` (TẮT).
+
+Hãy trả về chuỗi JSON CHUẨN như sau, KHÔNG có markdown, KHÔNG có text thừa:
+{{
+  "device_id": "led_1/led_2/none",
+  "action": true/false,
+  "reply": "Dạ em đã bật đèn phòng khách rồi ạ" (câu trả lời bằng tiếng Việt mềm mỏng đáng yêu để đọc ra loa)
+}}
+Nếu không hiểu hoặc không nói về thiết bị hiện có, trả về device_id="none", action=false và reply="Dạ em chưa hiểu ý anh ạ."
+"""
+    try:
+        response = model.generate_content(prompt)
+        text = response.text.replace("```json", "").replace("```", "").strip()
+        data = json.loads(text)
+        
+        device_id = data.get("device_id")
+        action = data.get("action")
+        reply = data.get("reply", "Dạ em đã xử lý xong.")
+        
+        if device_id and device_id != "none":
+            # Gửi lệnh MQTT
+            topic = f"smarthome/devices/{device_id}/control"
+            payload = "ON" if action else "OFF"
+            if mqtt.client:
+                mqtt.client.publish(topic, payload)
+            
+            # Cập nhật DB
+            if db.db is not None:
+                collection = db.db["devices"]
+                await collection.update_one(
+                    {"device_id": device_id},
+                    {"$set": {"status": action, "updated_at": datetime.utcnow()}}
+                )
+            
+            # 🔴 Broadcast realtime qua WebSocket
+            await ws_manager.broadcast({
+                "type": "device_update",
+                "device_id": device_id,
+                "status": action
+            })
+            
+        return {"reply": reply, "device_id": device_id, "action": action}
+    except Exception as e:
+        print(f"Lỗi AI: {e}")
+        return {"reply": "Dạ, hiện tại em đang bị lỗi kết nối mạng não bộ ạ.", "device_id": "none", "action": False}
+        raise HTTPException(status_code=500, detail=str(e))

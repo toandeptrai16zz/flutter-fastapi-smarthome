@@ -20,10 +20,15 @@ dependencies:
   # For beautiful fonts
   google_fonts: ^4.0.3
 
+  # AI Voice Assistant
+  speech_to_text: 6.5.0
+  flutter_tts: ^4.0.2
+
+  # Realtime WebSocket
+  web_socket_channel: ^2.4.0
+
   # State management (optional, but recommended for larger apps)
   # provider: ^6.0.5
-
-  #cupertino_icons: ^1.0.2
 
 dev_dependencies:
   flutter_test:

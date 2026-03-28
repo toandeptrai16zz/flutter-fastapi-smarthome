@@ -51,12 +51,13 @@ class MQTTService:
             import json
             from datetime import datetime
             from app.core.database import db
+            from app.main import ws_manager
             try:
                 data = json.loads(payload)
                 sensor_id = topic.split("/")[2]
                 
-                # Hàm async để thực thi bằng asyncio loop
-                async def save_sensor():
+                async def save_and_broadcast_sensor():
+                    # 1. Lưu MongoDB
                     if db.db is not None:
                         await db.db["sensors"].insert_one({
                             "device_id": sensor_id,
@@ -65,14 +66,41 @@ class MQTTService:
                             "timestamp": datetime.utcnow()
                         })
                         print(f"✅ Lưu DB thành công cảm biến {sensor_id}: {data}")
+                    # 2. Broadcast realtime qua WebSocket tới tất cả Flutter clients
+                    from app.services.websocket_manager import ws_manager
+                    await ws_manager.broadcast({
+                        "type": "sensor",
+                        "temperature": data.get("temperature", 0.0),
+                        "humidity": data.get("humidity", 0.0)
+                    })
+                    print(f"📡 Đã phát broadcast cảm biến {sensor_id} tới WebSocket")
 
-                # Chạy task vào luồng chính an toàn từ thread mạng
                 if self.loop is not None and self.loop.is_running():
-                    asyncio.run_coroutine_threadsafe(save_sensor(), self.loop)
+                    asyncio.run_coroutine_threadsafe(save_and_broadcast_sensor(), self.loop)
                 else:
                     print("⚠️ Event loop chưa sẵn sàng, bỏ qua lưu DB")
             except Exception as e:
                 print(f"❌ Lỗi xử lý data cảm biến: {e}")
+
+        # Nếu nhận trạng thái thiết bị từ ESP32
+        elif topic.startswith("smarthome/devices/") and topic.endswith("/status"):
+            try:
+                import json
+                from app.services.websocket_manager import ws_manager
+                device_data = json.loads(payload)
+                async def broadcast_device_status():
+                    await ws_manager.broadcast({
+                        "type": "esp32_status",
+                        "relay1": device_data.get("relay1", False),
+                        "relay2": device_data.get("relay2", False),
+                        "relay3": device_data.get("relay3", False),
+                        "relay4": device_data.get("relay4", False),
+                        "online": device_data.get("online", False)
+                    })
+                if self.loop is not None and self.loop.is_running():
+                    asyncio.run_coroutine_threadsafe(broadcast_device_status(), self.loop)
+            except Exception as e:
+                print(f"❌ Lỗi broadcast device status: {e}")
 
     async def publish(self, topic: str, payload: str):
         if not self.client or not self.connected:

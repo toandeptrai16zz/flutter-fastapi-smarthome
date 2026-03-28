@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     MQTT_BROKER_PORT: int = 1883
     MQTT_USERNAME: str = ""
     MQTT_PASSWORD: str = ""
+    GEMINI_API_KEY: str = ""
 
     class Config:
         env_file = ".env"
