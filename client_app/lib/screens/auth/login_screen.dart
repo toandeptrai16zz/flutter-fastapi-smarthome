@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../home/dashboard_screen.dart'; 
-import 'forgot_password_screen.dart'; // Import màn hình quên mật khẩu
+import 'forgot_password_screen.dart'; 
+import '../../utils/constants.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -14,6 +15,60 @@ class _LoginScreenState extends State<LoginScreen> {
   // Controller để lấy dữ liệu nhập (nếu cần xử lý logic sau này)
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passController = TextEditingController();
+
+  void _showServerConfigDialog() {
+    final TextEditingController urlController = TextEditingController(text: Constants.baseUrl);
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: const Text("Cấu hình Backend", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("Nhập URL Server (Localtunnel/Ngrok/IP)", style: TextStyle(color: Colors.white70, fontSize: 13)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: urlController,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: Colors.black26,
+                hintText: "https://your-domain.loca.lt",
+                hintStyle: const TextStyle(color: Colors.white38),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Text("⚠️ Lưu ý: Ví dụ http://192.168.1.10:8000", style: TextStyle(color: Colors.orangeAccent, fontSize: 11)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Hủy", style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+            onPressed: () async {
+              await Constants.updateBaseUrl(urlController.text);
+              if (mounted) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text("🚀 Đã cập nhật thành: ${Constants.baseUrl}")),
+                );
+              }
+            },
+            child: const Text("Lưu lại", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,13 +98,16 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 40),
 
               // 2. Logo Box
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
+              GestureDetector(
+                onLongPress: _showServerConfigDialog,
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Icon(Icons.hub, size: 40, color: AppColors.primary),
                 ),
-                child: const Icon(Icons.hub, size: 40, color: AppColors.primary),
               ),
               const SizedBox(height: 24),
               

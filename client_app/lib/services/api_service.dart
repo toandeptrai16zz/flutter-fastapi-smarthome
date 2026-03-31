@@ -7,14 +7,21 @@ class ApiService {
   // Gửi lệnh Bật/Tắt
   static Future<bool> toggleDevice(String deviceId, bool status) async {
     try {
+      final url = '${Constants.baseUrl}/device/update';
+      print("🚀 DEBUG: Calling toggleDevice: $url");
       final response = await http.post(
-        Uri.parse('${Constants.baseUrl}/device/update'), 
-        headers: {"Content-Type": "application/json"},
+        Uri.parse(url), 
+        headers: {
+          "Content-Type": "application/json",
+          "Bypass-Tunnel-Reminder": "true",
+          "ngrok-skip-browser-warning": "true",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        },
         body: jsonEncode({
           "device_id": deviceId,
           "status": status
         }),
-      ).timeout(const Duration(seconds: 5));
+      ).timeout(const Duration(seconds: 15));
       if (response.statusCode != 200) {
         print("toggleDevice lỗi: status=${response.statusCode} body=${response.body}");
       }
@@ -28,7 +35,16 @@ class ApiService {
   // Lấy trạng thái hiện tại
   static Future<bool> getStatus(String deviceId) async {
     try {
-      final response = await http.get(Uri.parse('${Constants.baseUrl}/device/$deviceId'));
+      final url = '${Constants.baseUrl}/device/$deviceId';
+      print("🚀 DEBUG: Calling getDeviceStatus: $url");
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          "Bypass-Tunnel-Reminder": "true",
+          "ngrok-skip-browser-warning": "true",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        },
+      );
       if (response.statusCode == 200) {
         var data = jsonDecode(response.body);
         return data['status'];
@@ -42,7 +58,16 @@ class ApiService {
   // Lấy dữ liệu cảm biến mới nhất
   static Future<Map<String, dynamic>?> getSensorData() async {
     try {
-      final response = await http.get(Uri.parse('${Constants.baseUrl}/sensors/latest')).timeout(const Duration(seconds: 5));
+      final url = '${Constants.baseUrl}/sensors/latest';
+      print("🚀 DEBUG: Calling getLatestSensorData: $url");
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          "Bypass-Tunnel-Reminder": "true",
+          "ngrok-skip-browser-warning": "true",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        },
+      ).timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       }
@@ -55,7 +80,16 @@ class ApiService {
   // Lấy danh sách lịch trình
   static Future<List<dynamic>> getSchedules() async {
     try {
-      final response = await http.get(Uri.parse('${Constants.baseUrl}/schedules')).timeout(const Duration(seconds: 5));
+      final url = '${Constants.baseUrl}/schedules';
+      print("🚀 DEBUG: Calling getSchedules: $url");
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          "Bypass-Tunnel-Reminder": "true",
+          "ngrok-skip-browser-warning": "true",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        },
+      ).timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       }
@@ -68,11 +102,18 @@ class ApiService {
   // Tạo mới lịch trình
   static Future<bool> createSchedule(Map<String, dynamic> scheduleData) async {
     try {
+      final url = '${Constants.baseUrl}/schedules';
+      print("🚀 DEBUG: Calling createSchedule: $url");
       final response = await http.post(
-        Uri.parse('${Constants.baseUrl}/schedules'),
-        headers: {"Content-Type": "application/json"},
+        Uri.parse(url),
+        headers: {
+          "Content-Type": "application/json",
+          "Bypass-Tunnel-Reminder": "true",
+          "ngrok-skip-browser-warning": "true",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        },
         body: jsonEncode(scheduleData),
-      ).timeout(const Duration(seconds: 5));
+      ).timeout(const Duration(seconds: 15));
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
       print("Lỗi tạo lịch trình: $e");
@@ -83,7 +124,16 @@ class ApiService {
   // Xóa lịch trình
   static Future<bool> deleteSchedule(String scheduleId) async {
     try {
-      final response = await http.delete(Uri.parse('${Constants.baseUrl}/schedules/$scheduleId')).timeout(const Duration(seconds: 5));
+      final url = '${Constants.baseUrl}/schedules/$scheduleId';
+      print("🚀 DEBUG: Calling deleteSchedule: $url");
+      final response = await http.delete(
+        Uri.parse(url),
+        headers: {
+          "Bypass-Tunnel-Reminder": "true",
+          "ngrok-skip-browser-warning": "true",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        },
+      ).timeout(const Duration(seconds: 15));
       return response.statusCode == 200;
     } catch (e) {
       print("Lỗi xóa lịch trình: $e");
@@ -94,7 +144,11 @@ class ApiService {
   // Bật/tắt trạng thái lịch trình
   static Future<bool> toggleSchedule(String scheduleId) async {
     try {
-      final response = await http.put(Uri.parse('${Constants.baseUrl}/schedules/$scheduleId/toggle')).timeout(const Duration(seconds: 5));
+      final response = await http.put(
+        Uri.parse('${Constants.baseUrl}/schedules/$scheduleId/toggle'),
+        headers: {"Bypass-Tunnel-Reminder": "true",
+          "ngrok-skip-browser-warning": "true"},
+      ).timeout(const Duration(seconds: 15));
       return response.statusCode == 200;
     } catch (e) {
       print("Lỗi đổi trạng thái lịch trình: $e");
@@ -108,7 +162,10 @@ class ApiService {
     try {
       final response = await http.post(
         Uri.parse('${Constants.baseUrl}/ai/chat'),
-        headers: {"Content-Type": "application/json; charset=UTF-8"},
+        headers: {
+          "Content-Type": "application/json; charset=UTF-8",
+          "bypass-tunnel-reminder": "true"
+        },
         body: jsonEncode({"message": text}),
       ).timeout(const Duration(seconds: 10)); // AI có thể phản hồi chậm 1-2s
       

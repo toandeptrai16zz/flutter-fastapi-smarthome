@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:web_socket_channel/io.dart';
 import '../utils/constants.dart';
 
 /// Singleton WebSocket service - push realtime từ Backend → Flutter
@@ -19,11 +20,8 @@ class WebSocketService {
   Stream<Map<String, dynamic>> get stream => _controller.stream;
   bool get isConnected => _isConnected;
 
-  /// Lấy WS URL từ baseUrl (http → ws)
-  String get _wsUrl {
-    final base = Constants.baseUrl.replaceFirst('http', 'ws');
-    return '$base/ws';
-  }
+  /// Lấy WS URL từ Constants
+  String get _wsUrl => Constants.wsUrl;
 
   /// Kết nối tới WebSocket Backend
   void connect() {
@@ -31,22 +29,27 @@ class WebSocketService {
     try {
       final wsUrl = _wsUrl;
       final uri = Uri.parse(wsUrl);
-      print('🔌 WebSocket Attempting: [${uri.toString()}] (Path: ${uri.path})');
+      _channel = IOWebSocketChannel.connect(
+        uri,
+        headers: {
+          "Bypass-Tunnel-Reminder": "true",
+          "ngrok-skip-browser-warning": "true"
+        },
+      );
       
-      _channel = WebSocketChannel.connect(uri);
-      _isConnected = true;
-      print('🔌 WebSocket connected to $wsUrl');
+      print('🔌 WebSocket Attempting to connect to $wsUrl...');
+      _isConnected = true; 
 
       _channel!.stream.listen(
         (data) {
           try {
+            print('📥 WebSocket Received raw: $data');
             final json = jsonDecode(data as String) as Map<String, dynamic>;
             if (json['type'] != 'pong') {
-              // Không forward ping-pong vào stream UI
               _controller.add(json);
             }
           } catch (e) {
-            print('❌ Lỗi parse WebSocket data: $e');
+            print('❌ Lỗi parse WebSocket data: $e | Raw: $data');
           }
         },
         onDone: () {
