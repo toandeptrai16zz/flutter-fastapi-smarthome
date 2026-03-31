@@ -54,4 +54,4 @@ Dự án đã được nâng cấp toàn diện để đạt được tính **Di
 - **Độ ổn định:** [Cao] Đã xử lý lỗi Timeout và SSL.
 
 ---
-**Chúc bạn có buổi báo cáo thành công!** 🚀
+**Sản phẩm phát triển bởi Toan16zz-haquangchuong28@gmail.com** 🚀
