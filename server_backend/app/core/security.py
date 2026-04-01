@@ -7,7 +7,11 @@ SECRET_KEY = settings.GEMINI_API_KEY if settings.GEMINI_API_KEY else "A_VERY_SEC
 ALGORITHM = "HS256"
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+    try:
+        return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+    except Exception as e:
+        print(f"Lỗi kiểm tra mật khẩu: {e}")
+        return False
 
 def get_password_hash(password: str) -> str:
     salt = bcrypt.gensalt()

@@ -46,6 +46,9 @@ async def run_scheduler_loop():
                 ]
             }
             schedules = await collection.find(query).to_list(100)
+            
+            print(f"🔎 [Scheduler] Quét giờ: {current_time_str} ({today_str}) - Tìm thấy {len(schedules)} lịch trình cần chạy.")
+            
             for sch in schedules:
                 device_id = sch["device_id"]
                 action = sch["action"]
@@ -68,11 +71,12 @@ async def run_scheduler_loop():
                     "device_id": device_id,
                     "status": action
                 })
+                print(f"✅ Đã broadcast kết quả Lịch trình cho Front-end: {device_id} = {action}")
                 
                 if len(sch.get("repeated_days", [])) == 0:
                     await collection.update_one({"_id": sch["_id"]}, {"$set": {"is_active": False}})
         except Exception as e:
-            print(f"Lỗi khi chạy scheduler: {e}")
+            print(f"❌ Lỗi khi chạy scheduler: {e}")
             
         seconds_to_next_minute = 60 - datetime.now().second
         await asyncio.sleep(seconds_to_next_minute)
@@ -313,21 +317,29 @@ async def ai_chat(req: ChatRequest):
     # Dùng gemini-2.5-flash cho tốc độ phản hồi cực nhanh -> tối ưu trải nghiệm Assistant
     model = genai.GenerativeModel('gemini-2.5-flash')
     
-    prompt = f"""Bạn là một trợ lý ảo quản lý nhà thông minh tên là "Nhà".
-Người dùng vừa ra lệnh: "{req.message}"
+    prompt = f"""Bạn tên là "Nhà" — trợ lý ảo của hệ thống nhà thông minh AIoT SmartHome.
+Tính cách: Bạn nói chuyện như một người bạn thân, vui vẻ, tự nhiên, hài hước nhẹ nhàng, KHÔNG cứng nhắc hay lễ phép quá mức. Dùng ngôn ngữ đời thường, gần gũi kiểu gen Z Việt Nam. Có thể dùng emoji khi phù hợp.
 
-Dưới đây là danh sách thiết bị bạn có thể điều khiển:
-- "led_1": Đèn Phòng Khách
-- "led_2": Đèn Phòng Ngủ
-Bạn phải chọn hành động là `true` (BẬT) hoặc `false` (TẮT).
+Người dùng vừa nói: "{req.message}"
 
-Hãy trả về chuỗi JSON CHUẨN như sau, KHÔNG có markdown, KHÔNG có text thừa:
+DANH SÁCH THIẾT BỊ bạn điều khiển được:
+- "led_1": Đèn Phòng Khách (còn gọi: đèn khách, light, phòng khách)
+- "led_2": Đèn Phòng Ngủ (còn gọi: đèn ngủ, đèn bedroom, phòng ngủ)
+- "fan_1": Quạt Máy (còn gọi: quạt, fan, quạt phòng khách)
+
+QUY TẮC:
+1. Nếu người dùng muốn BẬT/TẮT thiết bị → trả device_id tương ứng, action = true (bật) hoặc false (tắt).
+2. Nếu người dùng nói "bật/tắt hết", "tắt tất cả", "bật hết đèn"... → chọn thiết bị phù hợp nhất, hoặc trả device_id="all".
+3. Nếu người dùng chỉ nói chuyện bình thường, hỏi thăm, tâm sự, hoặc hỏi gì đó không liên quan thiết bị → vẫn trả lời vui vẻ như bạn bè, device_id="none", action=false.
+4. Nếu người dùng hỏi về thời tiết, nhiệt độ, độ ẩm → bảo họ xem trên dashboard, device_id="none".
+5. Câu trả lời phải ngắn gọn, tự nhiên, KHÔNG lễ phép kiểu "Dạ thưa", mà nói như bạn bè thân: "Oke", "Xong rồi nha", "Bật rồi đó", "Tắt hết cho rồi nè"...
+
+Trả về ĐÚNG 1 chuỗi JSON, KHÔNG markdown, KHÔNG text thừa:
 {{
-  "device_id": "led_1/led_2/none",
-  "action": true/false,
-  "reply": "Dạ em đã bật đèn phòng khách rồi ạ" (câu trả lời bằng tiếng Việt mềm mỏng đáng yêu để đọc ra loa)
+  "device_id": "led_1" hoặc "led_2" hoặc "fan_1" hoặc "none",
+  "action": true hoặc false,
+  "reply": "câu trả lời tự nhiên kiểu bạn bè"
 }}
-Nếu không hiểu hoặc không nói về thiết bị hiện có, trả về device_id="none", action=false và reply="Dạ em chưa hiểu ý anh ạ."
 """
     try:
         response = model.generate_content(prompt)

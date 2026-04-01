@@ -7,11 +7,19 @@ class AuthService {
   // Lấy baseUrl từ Constants
   static String get baseUrl => '${Constants.baseUrl}/api/auth';
 
+  // Headers dùng chung - quan trọng khi dùng Ngrok/LocalTunnel
+  static const Map<String, String> _headers = {
+    'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': 'true',
+    'Bypass-Tunnel-Reminder': 'true',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  };
+
   static Future<Map<String, dynamic>> sendOtp(String email) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/send-otp'),
-        headers: {'Content-Type': 'application/json'},
+        headers: _headers,
         body: jsonEncode({'email': email}),
       );
       final data = jsonDecode(response.body);
@@ -30,7 +38,7 @@ class AuthService {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/register'),
-        headers: {'Content-Type': 'application/json'},
+        headers: _headers,
         body: jsonEncode({
           'email': email,
           'full_name': fullName,
@@ -60,7 +68,7 @@ class AuthService {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/login'),
-        headers: {'Content-Type': 'application/json'},
+        headers: _headers,
         body: jsonEncode({
           'email': email,
           'password': password,
