@@ -11,6 +11,19 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
     GROQ_API_KEY: str = ""
 
+    # ESP32/NodeMCU Pin Pool (Mapping Label -> GPIO Number)
+    # D1=5, D2=4, D5=14, D6=12, D7=13, D8=15
+    ESP32_PIN_MAP: dict = {
+        "D1 (GPIO 5)": 5,
+        "D2 (GPIO 4)": 4,
+        "D3 (GPIO 0)": 0,
+        "D4 (GPIO 2)": 2,
+        "D5 (GPIO 14)": 14,
+        "D6 (GPIO 12)": 12,
+        "D7 (GPIO 13)": 13,
+        "D8 (GPIO 15)": 15
+    }
+
     class Config:
         env_file = ".env"
 

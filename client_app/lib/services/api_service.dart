@@ -11,6 +11,23 @@ class ApiService {
   };
 
   // === DYNAMIC DEVICE REGISTRY ===
+  
+  // Lấy danh sách chân GPIO còn trống
+  static Future<List<Map<String, dynamic>>> getAvailablePins() async {
+    try {
+      final response = await http.get(
+        Uri.parse('${Constants.baseUrl}/devices/available-pins'),
+        headers: _defaultHeaders,
+      ).timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) {
+        final list = jsonDecode(response.body) as List<dynamic>;
+        return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
+    } catch (e) {
+      print("❌ Lỗi lấy danh sách pin: $e");
+    }
+    return [];
+  }
 
   // Lấy toàn bộ danh sách thiết bị từ DB
   static Future<List<Map<String, dynamic>>> getAllDevices() async {

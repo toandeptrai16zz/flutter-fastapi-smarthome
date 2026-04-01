@@ -1,0 +1,17 @@
+- [x] **PHASE 1: Backend (FastAPI)**
+    - [x] Thêm `PIN_POOL` vào `config.py`.
+    - [x] Viết API `GET /devices/available-pins`.
+    - [x] Cập nhật `create_device` API để lưu `gpio_pin`.
+    - [x] Cập nhật `toggle_device` để gửi MQTT JSON (bọc `pin` & `action`).
+- [x] **PHASE 2: Mobile App (Flutter)**
+    - [x] Thêm `getAvailablePins` vào `ApiService`.
+    - [x] Nâng cấp Dialog "Thêm thiết bị" tích hợp Dropdown chọn Pin.
+    - [x] Cập nhật UI hiển thị Pin đã chọn trong DashBoard.
+- [x] **PHASE 3: Firmware (ESP32)**
+    - [x] Tích hợp thư viện `ArduinoJson`.
+    - [x] Viết logic parse JSON từ MQTT topic `smarthome/esp/gpio/control`.
+    - [x] Thực thi `digitalWrite` động.
+- [x] **PHASE 4: AI Control Integration**
+    - [x] Đồng bộ AI Chat với giao thức Pin động mới.
+- [x] **PHASE 5: Kiểm thử & Hoàn thiện**
+    - [x] [Hoàn thành] Các luồng đã được refactor xong xuôi.

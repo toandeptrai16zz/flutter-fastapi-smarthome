@@ -70,8 +70,11 @@ class _AutomationTabState extends State<AutomationTab> {
     }
   }
 
-  // Kiểm tra thiết bị có firmware chưa
-  bool _hasFirmware(String deviceId) => firmwareDeviceIds.contains(deviceId);
+  // Kiểm tra thiết bị có firmware chưa (Lấy từ dữ liệu Backend thay vì hardcode)
+  bool _hasFirmware(String deviceId) {
+    final d = allDevices.firstWhere((d) => d['device_id'] == deviceId, orElse: () => {});
+    return d['has_firmware'] == true;
+  }
 
   Future<void> _fetchSchedules() async {
     setState(() => isLoading = true);
@@ -355,7 +358,11 @@ class _AutomationTabState extends State<AutomationTab> {
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [Text(item['time'], style: TextStyle(color: widget.theme.textMain, fontSize: 20, fontWeight: FontWeight.bold)), const SizedBox(width: 4), Text(item['ampm'], style: TextStyle(color: widget.theme.textSub, fontSize: 12, fontWeight: FontWeight.bold))]),
           Row(children: [
-            Flexible(child: RichText(text: TextSpan(children: [TextSpan(text: "${item['name']}: ", style: TextStyle(color: widget.theme.textSub)), TextSpan(text: item['action'], style: TextStyle(color: item['color'], fontWeight: FontWeight.bold))]))),
+            Flexible(child: RichText(text: TextSpan(children: [
+              TextSpan(text: "${item['name']} ", style: TextStyle(color: widget.theme.textSub)),
+              if (item['pinLabel'] != null) TextSpan(text: "(${item['pinLabel']}): ", style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 11)),
+              TextSpan(text: item['action'], style: TextStyle(color: item['color'], fontWeight: FontWeight.bold))
+            ]))),
             if (item['hasFirmware'] == false) Padding(padding: const EdgeInsets.only(left: 6), child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
               decoration: BoxDecoration(color: Colors.amber.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
