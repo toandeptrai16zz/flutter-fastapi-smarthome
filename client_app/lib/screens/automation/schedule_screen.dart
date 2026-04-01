@@ -21,15 +21,57 @@ class AutomationTab extends StatefulWidget {
 
 class _AutomationTabState extends State<AutomationTab> {
   List<Map<String, dynamic>> schedules = [];
+  List<Map<String, dynamic>> allDevices = []; // 🔥 DYNAMIC: danh sách thiết bị từ DB
   bool isLoading = true;
 
-  List<String> dayLabels = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"]; // Ngày phù hợp backend
+  List<String> dayLabels = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
+
+  // Device IDs thực sự có code firmware trên ESP32
+  static const List<String> firmwareDeviceIds = ['led_1', 'led_2', 'fan_1'];
 
   @override
   void initState() {
     super.initState();
-    _fetchSchedules();
+    _loadData();
   }
+
+  Future<void> _loadData() async {
+    allDevices = await ApiService.getAllDevices();
+    await _fetchSchedules();
+  }
+
+  // Helper: lấy tên thiết bị từ device_id
+  String _getDeviceName(String deviceId) {
+    final d = allDevices.firstWhere((d) => d['device_id'] == deviceId, orElse: () => {});
+    return d.isNotEmpty ? (d['name'] as String? ?? deviceId) : deviceId;
+  }
+
+  // Helper: lấy icon từ type
+  IconData _getDeviceIcon(String deviceId) {
+    final d = allDevices.firstWhere((d) => d['device_id'] == deviceId, orElse: () => {});
+    switch (d['type'] as String? ?? '') {
+      case 'light': return Icons.lightbulb;
+      case 'fan': return Icons.mode_fan_off;
+      case 'ac': return Icons.ac_unit;
+      case 'door': return Icons.lock;
+      default: return Icons.devices;
+    }
+  }
+
+  // Helper: lấy color từ type
+  Color _getDeviceColor(String deviceId) {
+    final d = allDevices.firstWhere((d) => d['device_id'] == deviceId, orElse: () => {});
+    switch (d['type'] as String? ?? '') {
+      case 'light': return Colors.orange;
+      case 'fan': return Colors.lightGreen;
+      case 'ac': return Colors.blue;
+      case 'door': return Colors.cyan;
+      default: return Colors.grey;
+    }
+  }
+
+  // Kiểm tra thiết bị có firmware chưa
+  bool _hasFirmware(String deviceId) => firmwareDeviceIds.contains(deviceId);
 
   Future<void> _fetchSchedules() async {
     setState(() => isLoading = true);
@@ -50,13 +92,14 @@ class _AutomationTabState extends State<AutomationTab> {
         "device_id": d['device_id'],
         "time": time12,
         "ampm": ampm,
-        "name": d['device_id'] == 'led_1' ? "Đèn PK" : "Đèn PN",
+        "name": _getDeviceName(d['device_id']),
         "action": d['action'] ? "BẬT" : "TẮT",
         "actionBool": d['action'],
         "repeat": repeatStr,
-        "icon": d['device_id'] == 'led_1' ? Icons.lightbulb : Icons.bed,
-        "color": d['device_id'] == 'led_1' ? Colors.orange : Colors.yellow,
+        "icon": _getDeviceIcon(d['device_id']),
+        "color": _getDeviceColor(d['device_id']),
         "isActive": d['is_active'],
+        "hasFirmware": _hasFirmware(d['device_id']),
         "rawDays": List.generate(7, (i) => rDays.contains(dayLabels[i])),
         "rawTime": DateTime(2024, 1, 1, h, m)
       });
@@ -89,7 +132,9 @@ class _AutomationTabState extends State<AutomationTab> {
 
     DateTime selectedDateTime = isEditMode ? existingItem!['rawTime'] : DateTime.now();
     List<bool> selectedDays = isEditMode ? List<bool>.from(existingItem!['rawDays']) : [false, false, false, false, false, false, false];
-    String selectedDevice = isEditMode ? existingItem!['device_id'] : 'led_1';
+    String selectedDevice = isEditMode
+        ? existingItem!['device_id']
+        : (allDevices.isNotEmpty ? allDevices.first['device_id'] as String : 'led_1');
     bool selectedAction = isEditMode ? existingItem!['actionBool'] : true;
 
     showModalBottomSheet(
@@ -155,14 +200,29 @@ class _AutomationTabState extends State<AutomationTab> {
                           child: Column(
                             children: [
                               DropdownButton<String>(
-                                value: selectedDevice,
+                                value: allDevices.any((d) => d['device_id'] == selectedDevice) ? selectedDevice : (allDevices.isNotEmpty ? allDevices.first['device_id'] as String : null),
                                 dropdownColor: widget.theme.surface,
                                 isExpanded: true,
                                 underline: const SizedBox(),
-                                items: [
-                                  DropdownMenuItem(value: 'led_1', child: Text("Đèn Phòng Khách (led_1)", style: TextStyle(color: widget.theme.textMain))),
-                                  DropdownMenuItem(value: 'led_2', child: Text("Đèn Phòng Ngủ (led_2)", style: TextStyle(color: widget.theme.textMain))),
-                                ],
+                                items: allDevices.map((d) {
+                                  final id = d['device_id'] as String;
+                                  final name = d['name'] as String? ?? id;
+                                  final room = d['room'] as String? ?? '';
+                                  final hasFw = _hasFirmware(id);
+                                  return DropdownMenuItem<String>(
+                                    value: id,
+                                    child: Row(children: [
+                                      Icon(_getDeviceIcon(id), color: _getDeviceColor(id), size: 18),
+                                      const SizedBox(width: 8),
+                                      Expanded(child: Text("$name${room.isNotEmpty ? ' ($room)' : ''}", style: TextStyle(color: widget.theme.textMain), overflow: TextOverflow.ellipsis)),
+                                      if (!hasFw) Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(color: Colors.amber.withOpacity(0.2), borderRadius: BorderRadius.circular(6)),
+                                        child: const Text("⚠ No FW", style: TextStyle(fontSize: 9, color: Colors.amber)),
+                                      ),
+                                    ]),
+                                  );
+                                }).toList(),
                                 onChanged: (v) => setStatePopup(() => selectedDevice = v!),
                               ),
                               Divider(color: widget.theme.border),
@@ -294,7 +354,14 @@ class _AutomationTabState extends State<AutomationTab> {
         const SizedBox(width: 16),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [Text(item['time'], style: TextStyle(color: widget.theme.textMain, fontSize: 20, fontWeight: FontWeight.bold)), const SizedBox(width: 4), Text(item['ampm'], style: TextStyle(color: widget.theme.textSub, fontSize: 12, fontWeight: FontWeight.bold))]),
-          RichText(text: TextSpan(children: [TextSpan(text: "${item['name']}: ", style: TextStyle(color: widget.theme.textSub)), TextSpan(text: item['action'], style: TextStyle(color: item['color'], fontWeight: FontWeight.bold))])),
+          Row(children: [
+            Flexible(child: RichText(text: TextSpan(children: [TextSpan(text: "${item['name']}: ", style: TextStyle(color: widget.theme.textSub)), TextSpan(text: item['action'], style: TextStyle(color: item['color'], fontWeight: FontWeight.bold))]))),
+            if (item['hasFirmware'] == false) Padding(padding: const EdgeInsets.only(left: 6), child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              decoration: BoxDecoration(color: Colors.amber.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+              child: const Text("⚠ Cần FW", style: TextStyle(fontSize: 9, color: Colors.amber)),
+            )),
+          ]),
           const SizedBox(height: 4),
           Text(item['repeat'], style: TextStyle(color: widget.theme.textSub, fontSize: 12)),
         ])),

@@ -65,41 +65,38 @@ class MQTTService:
                 if temp >= 31.0 and (current_time - self.last_ai_alert_time > 10):  # 10s = Test mode (Đổi về 600s sau)
                     self.last_ai_alert_time = current_time
                     async def process_ai():
-                        import google.generativeai as genai
+                        from groq import AsyncGroq
                         from app.core.config import settings
                         from app.services.websocket_manager import ws_manager
                         try:
-                            if not settings.GEMINI_API_KEY:
-                                raise ValueError("Missing GEMINI_API_KEY in settings")
-                            genai.configure(api_key=settings.GEMINI_API_KEY)
-                            model = genai.GenerativeModel('gemini-2.5-flash', generation_config={"response_mime_type": "application/json"})
-                            prompt = f"""
-Nhiệt độ hiện tại trong nhà là {temp}°C, độ ẩm {hum}%.
-Hãy đóng vai một trợ lý AI quản gia thông minh.
-Vì thời tiết đang khá nóng (trên 31 độ), hãy quyết định BẬT 'Quạt Máy' (thiết lập fan_action là true).
-Đồng thời, tạo một câu thông báo ngắn gọn bằng tiếng Việt vui vẻ, thân thiện (dưới 15 chữ) cho người dùng biết bạn vừa tự bật quạt giúp họ làm mát.
-Đáp ứng đúng JSON duy nhất như sau: {{"fan_action": true, "message": "Câu thông báo"}}
-"""
-                            # Tránh block main loop
-                            response = await asyncio.to_thread(model.generate_content, prompt)
-                            result_text = response.text.strip()
-                            if result_text.startswith("```json"):
-                                result_text = result_text[7:-3]
+                            if not settings.GROQ_API_KEY:
+                                raise ValueError("Chưa cài GROQ_API_KEY trong .env")
+                            groq_client = AsyncGroq(api_key=settings.GROQ_API_KEY)
+                            prompt = f"""Nhiệt độ trong nhà hiện tại là {temp}°C, độ ẩm {hum}%.
+Bạn là trợ lý AI quản gia nhà thông minh. Thời tiết đang nóng (trên 31 độ), hãy quyết định BẬT quạt.
+Tạo câu thông báo ngắn gọn bằng tiếng Việt vui vẻ thân thiện (dưới 15 chữ).
+Trả về ĐÚNG 1 JSON, KHÔNG markdown: {{"fan_action": true, "message": "Câu thông báo"}}"""
+                            response = await groq_client.chat.completions.create(
+                                model="llama-3.3-70b-versatile",
+                                messages=[{"role": "user", "content": prompt}],
+                                temperature=0.3
+                            )
+                            result_text = response.choices[0].message.content.replace("```json", "").replace("```", "").strip()
                             ai_result = json.loads(result_text)
                             if ai_result.get("fan_action"):
-                                print(f"🤖 AI quyết định bật quạt: {ai_result.get('message')}")
+                                print(f"🤖 AI Groq quyết định bật quạt: {ai_result.get('message')}")
                                 await self.publish("smarthome/devices/fan_1/control", "ON")
                                 await ws_manager.broadcast({
                                     "type": "ai_alert",
-                                    "message": ai_result.get("message", "Nóng quá! Nhỏ AI bật Quạt cho anh nha!"),
+                                    "message": ai_result.get("message", "Nóng quá! AI bật Quạt cho bạn nha! 🌀"),
                                     "device_id": "fan_1",
                                     "status": True
                                 })
                         except Exception as ai_e:
-                            print(f"❌ Lỗi xử lý AI Tự động làm mát: {ai_e}")
+                            print(f"❌ Lỗi AI Groq tự động làm mát: {ai_e}")
                             await ws_manager.broadcast({
                                 "type": "ai_alert",
-                                "message": f"Lỗi AI Backend: {ai_e}",
+                                "message": f"Lỗi AI: {ai_e}",
                                 "device_id": "fan_1",
                                 "status": False
                             })

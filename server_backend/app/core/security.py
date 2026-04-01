@@ -3,7 +3,7 @@ import jwt
 import bcrypt
 from app.core.config import settings
 
-SECRET_KEY = settings.GEMINI_API_KEY if settings.GEMINI_API_KEY else "A_VERY_SECRET_KEY_FOR_JWT_THAT_SHOULD_BE_CHANGED"
+SECRET_KEY = settings.GROQ_API_KEY if settings.GROQ_API_KEY else "A_VERY_SECRET_KEY_FOR_JWT_THAT_SHOULD_BE_CHANGED"
 ALGORITHM = "HS256"
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:

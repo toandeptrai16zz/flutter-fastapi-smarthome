@@ -150,11 +150,111 @@ async def websocket_endpoint(websocket: WebSocket):
         ws_manager.disconnect(websocket)
 
 
+# Device IDs thực sự có code phần cứng trên ESP32
+FIRMWARE_DEVICE_IDS = ["led_1", "led_2", "fan_1"]
+
 @app.get("/devices")
 async def get_all_devices():
     collection = db.db["devices"]
     devices = await collection.find({}, {"_id": 0}).to_list(100)
+    # Thêm thông tin has_firmware cho mỗi thiết bị
+    for d in devices:
+        d["has_firmware"] = d["device_id"] in FIRMWARE_DEVICE_IDS
     return devices
+
+
+@app.post("/devices")
+async def create_device(data: dict = Body(...)):
+    """Tạo thiết bị mới từ App (Dynamic Device Registry)"""
+    device_id = data.get("device_id")
+    if not device_id:
+        raise HTTPException(status_code=400, detail="Thiếu device_id")
+    
+    collection = db.db["devices"]
+    existing = await collection.find_one({"device_id": device_id})
+    if existing:
+        raise HTTPException(status_code=409, detail=f"Thiết bị '{device_id}' đã tồn tại")
+    
+    now = datetime.utcnow()
+    new_device = {
+        "device_id": device_id,
+        "name": data.get("name", f"Device {device_id}"),
+        "type": data.get("type", "unknown"),
+        "room": data.get("room", ""),
+        "icon": data.get("icon", "devices"),
+        "status": False,
+        "value": 0.0,
+        "created_at": now,
+        "updated_at": now,
+    }
+    
+    # Thêm info has_firmware
+    new_device["has_firmware"] = device_id in FIRMWARE_DEVICE_IDS
+    
+    await collection.insert_one(new_device.copy())
+    new_device.pop("_id", None)
+    
+    # Broadcast cho tất cả Flutter clients biết có thiết bị mới
+    await ws_manager.broadcast({
+        **new_device,
+        "type": "device_added", # Đặt sau cùng để không bị **new_device clobber
+        "created_at": str(now),
+        "updated_at": str(now),
+    })
+    
+    return {"message": f"Đã thêm thiết bị '{new_device['name']}'", "data": new_device}
+
+
+@app.put("/devices/{device_id}")
+async def update_device_info(device_id: str, data: dict = Body(...)):
+    """Sửa thông tin thiết bị (tên, phòng, loại, icon)"""
+    collection = db.db["devices"]
+    update_fields = {}
+    for field in ["name", "room", "type", "icon"]:
+        if field in data:
+            update_fields[field] = data[field]
+    
+    if not update_fields:
+        raise HTTPException(status_code=400, detail="Không có trường nào để cập nhật")
+    
+    update_fields["updated_at"] = datetime.utcnow()
+    result = await collection.update_one({"device_id": device_id}, {"$set": update_fields})
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Không tìm thấy thiết bị")
+    
+    updated = await collection.find_one({"device_id": device_id}, {"_id": 0})
+    
+    await ws_manager.broadcast({
+        **update_fields,
+        "type": "device_updated", # Đặt sau cùng
+        "device_id": device_id,
+        "updated_at": str(update_fields["updated_at"]),
+    })
+    
+    return {"message": "Đã cập nhật thiết bị", "data": updated}
+
+
+@app.delete("/devices/{device_id}")
+async def delete_device(device_id: str):
+    """Xóa thiết bị + cascade xóa lịch trình liên quan"""
+    collection = db.db["devices"]
+    result = await collection.delete_one({"device_id": device_id})
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Không tìm thấy thiết bị")
+    
+    # Cascade: Xóa lịch trình liên quan
+    await db.db["schedules"].delete_many({"device_id": device_id})
+    # Cascade: Xóa logs liên quan
+    await db.db["device_logs"].delete_many({"device_id": device_id})
+    
+    await ws_manager.broadcast({
+        "type": "device_deleted",
+        "device_id": device_id,
+    })
+    
+    return {"message": f"Đã xóa thiết bị '{device_id}' và dữ liệu liên quan"}
 
 
 @app.get("/device/{device_id}")
@@ -315,26 +415,40 @@ async def ai_chat(req: ChatRequest):
     # Khởi tạo client Groq
     groq_client = AsyncGroq(api_key=settings.GROQ_API_KEY)
     
+    # 🔥 DYNAMIC: Query danh sách thiết bị từ MongoDB (không hardcode nữa!)
+    all_devices = await db.db["devices"].find({}, {"_id": 0, "device_id": 1, "name": 1, "room": 1, "type": 1}).to_list(100)
+    
+    # Gắn has_firmware cho AI biết
+    device_list = []
+    for d in all_devices:
+        has_fw = d["device_id"] in FIRMWARE_DEVICE_IDS
+        fw_status = "ĐÃ CÓ PHẦN CỨNG" if has_fw else "CHƯA CÓ PHẦN CỨNG (Cần nạp FW)"
+        device_list.append(f'- "{d["device_id"]}": {d.get("name", d["device_id"])} (phòng: {d.get("room", "N/A")}, loại: {d.get("type", "unknown")}) -> TRẠNG THÁI: {fw_status}')
+    
+    device_list_str = "\n".join(device_list) if device_list else '- Chưa có thiết bị nào được đăng ký.'
+    
+    valid_ids = [d["device_id"] for d in all_devices]
+    valid_ids_str = " hoặc ".join([f'"{vid}"' for vid in valid_ids]) + ' hoặc "all" hoặc "none"' if valid_ids else '"none"'
+    
     prompt = f"""Bạn tên là "Nhà" — trợ lý ảo của hệ thống nhà thông minh AIoT SmartHome.
 Tính cách: Bạn nói chuyện như một người bạn thân, vui vẻ, tự nhiên, hài hước nhẹ nhàng, KHÔNG cứng nhắc hay lễ phép quá mức. Dùng ngôn ngữ đời thường, gần gũi kiểu gen Z Việt Nam. Có thể dùng emoji khi phù hợp.
 
 Người dùng vừa nói: "{req.message}"
 
-DANH SÁCH THIẾT BỊ bạn điều khiển được:
-- "led_1": Đèn Phòng Khách (còn gọi: đèn khách, light, phòng khách)
-- "led_2": Đèn Phòng Ngủ (còn gọi: đèn ngủ, đèn bedroom, phòng ngủ)
-- "fan_1": Quạt Máy (còn gọi: quạt, fan, quạt phòng khách)
+DANH SÁCH THIẾT BỊ HỆ THỐNG:
+{device_list_str}
 
-QUY TẮC:
+QUY TẮC QUAN TRỌNG:
 1. Nếu muốn BẬT/TẮT thiết bị → trả JSON với device_id tương ứng, action = true (bật) hoặc false (tắt).
 2. "bật/tắt hết", "tắt tất cả" → chọn thiết bị phù hợp nhất hoặc device_id="all".
-3. Nếu người dùng chỉ nói chuyện bình thường, hỏi thăm, tâm sự → trả lời vui vẻ, device_id="none", action=false.
-4. Yêu cầu thời tiết, nhiệt độ → bảo họ xem dashboard, device_id="none".
-5. Câu trả lời cực ngắn gọn, tự nhiên như bạn bè.
+3. Nếu người dùng muốn điều khiển thiết bị có trạng thái "CHƯA CÓ PHẦN CỨNG", hãy vẫn trả về JSON đúng device_id nhưng trong "reply" hãy nhắc khéo họ là "Thiết bị này mới thêm trên app thôi chứ chưa nạp code firmware vào ESP32 đâu, nhớ nạp nhé bạn hiền!".
+4. Nếu người dùng chỉ nói chuyện bình thường, hỏi thăm, tâm sự → trả lời vui vẻ, device_id="none", action=false.
+5. Yêu cầu thời tiết, nhiệt độ → bảo họ xem dashboard, device_id="none".
+6. Câu trả lời cực ngắn gọn, tự nhiên và trẻ trung.
 
 Trả về ĐÚNG 1 chuỗi JSON, KHÔNG markdown, KHÔNG text thừa:
 {{
-  "device_id": "led_1" hoặc "led_2" hoặc "fan_1" hoặc "none",
+  "device_id": {valid_ids_str},
   "action": true hoặc false,
   "reply": "câu trả lời tự nhiên kiểu bạn bè"
 }}

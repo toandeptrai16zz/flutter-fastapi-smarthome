@@ -308,17 +308,16 @@ class _HomeTabState extends State<_HomeTab> {
   bool isLoading = true;
   String currentTemp = "--";
   String currentHum = "--";
-  StreamSubscription? _wsSubscription; // WebSocket listener thay thế Timer
+  StreamSubscription? _wsSubscription;
 
-  Map<String, bool> deviceStates = {
-    "Smart AC": false, "Smart Light": false, "Smart Fan": false, "Front Door": true, "Sensor Hub": false,
-  };
+  // 🔥 DYNAMIC: Danh sách thiết bị lấy từ MongoDB, không hardcode nữa!
+  List<Map<String, dynamic>> devices = [];
 
   @override
   void initState() {
     super.initState();
-    _loadDeviceStates(); // Load lần đầu qua REST để có dữ liệu ngay
-    _connectWebSocket(); // Sau đó lắng nghe realtime qua WS
+    _loadAllDevices();
+    _connectWebSocket();
   }
 
   void _connectWebSocket() {
@@ -328,48 +327,73 @@ class _HomeTabState extends State<_HomeTab> {
       if (!mounted) return;
       final type = data['type'] as String?;
       if (type == 'sensor') {
-        // Cập nhật nhiệt độ/độ ẩm realtime
         setState(() {
           currentTemp = data['temperature']?.toString() ?? currentTemp;
           currentHum = data['humidity']?.toString() ?? currentHum;
         });
       } else if (type == 'device_update') {
-        // Trạng thái relay cập nhật từ lệnh toggle hoặc AI
+        // Cập nhật trạng thái thiết bị ĐỘNG theo device_id
         final deviceId = data['device_id'] as String?;
         final status = data['status'] as bool? ?? false;
-        setState(() {
-          if (deviceId == 'led_1') deviceStates["Smart AC"] = status;
-          if (deviceId == 'led_2') deviceStates["Smart Light"] = status;
-        });
+        final idx = devices.indexWhere((d) => d['device_id'] == deviceId);
+        if (idx != -1) {
+          setState(() => devices[idx]['status'] = status);
+        }
       } else if (type == 'ai_alert') {
         final message = data['message'] as String? ?? "AI Alert";
-        setState(() {
-          deviceStates["Smart Fan"] = data['status'] as bool? ?? true;
-        });
-        showDialog(context: context, builder: (context) => AlertDialog(
-          backgroundColor: widget.theme.surface,
-          title: Row(children: [const Icon(Icons.smart_toy, color: Colors.blue), const SizedBox(width: 8), Text("Trợ lý AI", style: TextStyle(color: widget.theme.textMain))]),
-          content: Text(message, style: TextStyle(color: widget.theme.textSub)),
-          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Đã hiểu"))]
-        ));
-      // Đã gỡ bỏ block `esp32_status` gây lỗi nhảy nút giao diện do nhận sai dữ liệu rác từ HiveMQ public.
+        final deviceId = data['device_id'] as String?;
+        final status = data['status'] as bool? ?? true;
+        final idx = devices.indexWhere((d) => d['device_id'] == deviceId);
+        if (idx != -1) setState(() => devices[idx]['status'] = status);
+        _showAITalkDialog(message);
+      } else if (type == 'device_added') {
+        // Thiết bị mới được thêm từ nơi khác → hiển thị ngay!
+        final deviceId = data['device_id'] as String?;
+        if (deviceId != null && !devices.any((d) => d['device_id'] == deviceId)) {
+          setState(() => devices.add(Map<String, dynamic>.from(data)));
+        }
+      } else if (type == 'device_deleted') {
+        // Thiết bị bị xóa → gỡ khỏi danh sách
+        setState(() => devices.removeWhere((d) => d['device_id'] == data['device_id']));
+      } else if (type == 'device_updated') {
+        // Thiết bị được cập nhật thông tin
+        final deviceId = data['device_id'] as String?;
+        final idx = devices.indexWhere((d) => d['device_id'] == deviceId);
+        if (idx != -1) {
+          setState(() {
+            devices[idx]['name'] = data['name'] ?? devices[idx]['name'];
+            devices[idx]['room'] = data['room'] ?? devices[idx]['room'];
+            devices[idx]['type'] = data['type'] ?? devices[idx]['type'];
+          });
+        }
       } else if (type == 'init') {
-        // Snapshot ban đầu khi vừa kết nối WS
         final sensor = data['sensor'] as Map<String, dynamic>?;
         if (sensor != null) {
           currentTemp = sensor['temperature']?.toString() ?? currentTemp;
           currentHum = sensor['humidity']?.toString() ?? currentHum;
         }
-        final devices = data['devices'] as List<dynamic>?;
-        if (devices != null) {
-          for (final d in devices) {
-            if (d['device_id'] == 'led_1') deviceStates["Smart AC"] = d['status'] as bool? ?? false;
-            if (d['device_id'] == 'led_2') deviceStates["Smart Light"] = d['status'] as bool? ?? false;
-          }
+        final devList = data['devices'] as List<dynamic>?;
+        if (devList != null) {
+          setState(() {
+            devices = devList.map((d) => Map<String, dynamic>.from(d as Map)).toList();
+            isLoading = false;
+          });
         }
-        setState(() { isLoading = false; });
       }
     });
+  }
+
+  void _showAITalkDialog(String message) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: widget.theme.surface,
+        title: Row(children: [const Icon(Icons.smart_toy, color: Colors.blue), const SizedBox(width: 8), Text("Trợ lý AI", style: TextStyle(color: widget.theme.textMain))]),
+        content: Text(message, style: TextStyle(color: widget.theme.textSub)),
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Đã hiểu"))]
+      )
+    );
   }
 
   @override
@@ -378,15 +402,12 @@ class _HomeTabState extends State<_HomeTab> {
     super.dispose();
   }
 
-  void _loadDeviceStates() async {
-    bool acStatus = await ApiService.getStatus("led_1");
-    bool lightStatus = await ApiService.getStatus("led_2");
+  void _loadAllDevices() async {
+    var allDevices = await ApiService.getAllDevices();
     var sensorData = await ApiService.getSensorData();
-
     if (mounted) {
       setState(() {
-        deviceStates["Smart AC"] = acStatus;
-        deviceStates["Smart Light"] = lightStatus;
+        devices = allDevices;
         if (sensorData != null) {
           currentTemp = sensorData['temperature']?.toString() ?? "--";
           currentHum = sensorData['humidity']?.toString() ?? "--";
@@ -396,61 +417,226 @@ class _HomeTabState extends State<_HomeTab> {
     }
   }
 
-  void _toggleDevice(String key, bool newState) async {
-    setState(() => deviceStates[key] = newState); // Đổi UI ngay cho mượt
+  void _toggleDevice(String deviceId, bool newState) async {
+    final idx = devices.indexWhere((d) => d['device_id'] == deviceId);
+    if (idx == -1) return;
     
-    // Map giao diện ảo với DeviceID trên Backend thật
-    String deviceId = "";
-    if (key == "Smart AC") deviceId = "led_1";
-    if (key == "Smart Light") deviceId = "led_2";
-    if (key == "Smart Fan") deviceId = "fan_1";
-    
-    if (deviceId.isNotEmpty) {
-      bool success = await ApiService.toggleDevice(deviceId, newState);
-      if (!success && mounted) {
-        setState(() => deviceStates[key] = !newState); // Rollback nếu mạng lỗi
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Lỗi! Không bật tắt được.")));
-      }
+    // Kiểm tra firmware trước khi điều khiển
+    final hasFw = devices[idx]['has_firmware'] as bool? ?? true;
+    if (!hasFw) {
+      _showAITalkDialog("Ôi bạn ơi! Thiết bị này được thêm trên App cho vui vậy thôi chứ chưa có code phần cứng (Firmware) trên ESP32 đâu. Nhớ nạp code cho nó nhé! 😉");
+      return; 
+    }
+
+    setState(() => devices[idx]['status'] = newState);
+    bool success = await ApiService.toggleDevice(deviceId, newState);
+    if (!success && mounted) {
+      setState(() => devices[idx]['status'] = !newState);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Lỗi! Không bật tắt được.")));
+    }
+  }
+
+  // Map type → icon
+  IconData _getIcon(String? type) {
+    switch (type) {
+      case 'light': return Icons.lightbulb;
+      case 'fan': return Icons.mode_fan_off;
+      case 'ac': return Icons.ac_unit;
+      case 'door': return Icons.lock;
+      case 'curtain': return Icons.curtains;
+      case 'sensor': return Icons.sensors;
+      case 'tv': return Icons.tv;
+      default: return Icons.devices;
+    }
+  }
+
+  // Map type → color
+  Color _getColor(String? type) {
+    switch (type) {
+      case 'light': return Colors.orange;
+      case 'fan': return Colors.lightGreen;
+      case 'ac': return Colors.blue;
+      case 'door': return Colors.cyan;
+      case 'curtain': return Colors.purple;
+      case 'tv': return Colors.red;
+      default: return Colors.grey;
     }
   }
 
   void _showAddDeviceDialog() {
     TextEditingController nameController = TextEditingController();
+    TextEditingController idController = TextEditingController();
+    String selectedRoom = "Phòng Khách";
+    String selectedType = "light";
+    
+    final rooms = ["Phòng Khách", "Phòng Ngủ", "Nhà Bếp", "Sân Vườn", "Phòng Tắm", "Entrance"];
+    final types = {"light": "Đèn", "fan": "Quạt", "ac": "Điều Hòa", "door": "Cửa/Khóa", "curtain": "Rèm Cửa", "tv": "TV", "sensor": "Cảm Biến"};
+
     showModalBottomSheet(
       context: context,
       backgroundColor: widget.theme.surface,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 24, right: 24, top: 24),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-           Center(child: Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey[600], borderRadius: BorderRadius.circular(10)))),
-           const SizedBox(height: 20),
-           Text(widget.tr('add_device'), style: TextStyle(color: widget.theme.textMain, fontSize: 20, fontWeight: FontWeight.bold)),
-           const SizedBox(height: 20),
-           TextField(
-             controller: nameController,
-             style: TextStyle(color: widget.theme.textMain),
-             decoration: InputDecoration(
-               hintText: widget.tr('enter_name'),
-               hintStyle: TextStyle(color: widget.theme.textSub),
-               filled: true,
-               fillColor: widget.theme.background,
-               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 24, right: 24, top: 24),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+             Center(child: Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey[600], borderRadius: BorderRadius.circular(10)))),
+             const SizedBox(height: 20),
+             Text(widget.tr('add_device'), style: TextStyle(color: widget.theme.textMain, fontSize: 20, fontWeight: FontWeight.bold)),
+             const SizedBox(height: 16),
+             TextField(
+               controller: nameController,
+               style: TextStyle(color: widget.theme.textMain),
+               decoration: InputDecoration(hintText: "Tên thiết bị (VD: Đèn Phòng Ngủ)", hintStyle: TextStyle(color: widget.theme.textSub), filled: true, fillColor: widget.theme.background, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)),
              ),
-           ),
-           const SizedBox(height: 20),
-           SizedBox(width: double.infinity, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: widget.theme.primary, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), 
-             onPressed: () {
-               if(nameController.text.isNotEmpty) {
-                 Navigator.pop(context);
-                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Đã thêm: ${nameController.text}")));
-               }
-             }, 
-             child: Text(widget.tr('add_now'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)))),
-           const SizedBox(height: 30),
-        ]),
+             const SizedBox(height: 12),
+             TextField(
+               controller: idController,
+               style: TextStyle(color: widget.theme.textMain),
+               decoration: InputDecoration(hintText: "Device ID (VD: led_3, ac_1)", hintStyle: TextStyle(color: widget.theme.textSub), filled: true, fillColor: widget.theme.background, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)),
+             ),
+             const SizedBox(height: 12),
+             // Dropdown chọn phòng
+             Container(
+               padding: const EdgeInsets.symmetric(horizontal: 12),
+               decoration: BoxDecoration(color: widget.theme.background, borderRadius: BorderRadius.circular(12)),
+               child: DropdownButton<String>(
+                 value: selectedRoom, isExpanded: true, underline: const SizedBox(),
+                 dropdownColor: widget.theme.surface,
+                 style: TextStyle(color: widget.theme.textMain),
+                 items: rooms.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
+                 onChanged: (v) => setSheetState(() => selectedRoom = v!),
+               ),
+             ),
+             const SizedBox(height: 12),
+             // Dropdown chọn loại
+             Container(
+               padding: const EdgeInsets.symmetric(horizontal: 12),
+               decoration: BoxDecoration(color: widget.theme.background, borderRadius: BorderRadius.circular(12)),
+               child: DropdownButton<String>(
+                 value: selectedType, isExpanded: true, underline: const SizedBox(),
+                 dropdownColor: widget.theme.surface,
+                 style: TextStyle(color: widget.theme.textMain),
+                 items: types.entries.map((e) => DropdownMenuItem(value: e.key, child: Row(children: [Icon(_getIcon(e.key), color: _getColor(e.key), size: 20), const SizedBox(width: 8), Text(e.value)]))).toList(),
+                 onChanged: (v) => setSheetState(() => selectedType = v!),
+               ),
+             ),
+             const SizedBox(height: 20),
+             SizedBox(width: double.infinity, child: ElevatedButton(
+               style: ElevatedButton.styleFrom(backgroundColor: widget.theme.primary, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+               onPressed: () async {
+                 if (nameController.text.isNotEmpty && idController.text.isNotEmpty) {
+                   Navigator.pop(context);
+                   bool ok = await ApiService.createDevice({
+                     "device_id": idController.text.trim(),
+                     "name": nameController.text.trim(),
+                     "type": selectedType,
+                     "room": selectedRoom,
+                   });
+                   if (ok) {
+                     _loadAllDevices(); // 🔥 Reload lại danh sách ngay lập tức
+                     if (mounted) {
+                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("✅ Đã thêm: ${nameController.text}")));
+                     }
+                    } else {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("❌ Lỗi! Có thể ID đã tồn tại.")));
+                      }
+                    }
+                 }
+               },
+               child: Text(widget.tr('add_now'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+             )),
+             const SizedBox(height: 30),
+          ]),
+        ),
       ),
+    );
+  }
+
+  void _showEditDeviceDialog(Map<String, dynamic> device) {
+    TextEditingController nameController = TextEditingController(text: device['name'] ?? "");
+    String selectedRoom = device['room'] ?? "Phòng Khách";
+    String selectedType = device['type'] ?? "light";
+    String deviceId = device['device_id'];
+    
+    final rooms = ["Phòng Khách", "Phòng Ngủ", "Nhà Bếp", "Sân Vườn", "Phòng Tắm", "Entrance"];
+    final types = {"light": "Đèn", "fan": "Quạt", "ac": "Điều Hòa", "door": "Cửa/Khóa", "curtain": "Rèm Cửa", "tv": "TV", "sensor": "Cảm Biến"};
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: widget.theme.surface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 24, right: 24, top: 24),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+             Center(child: Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey[600], borderRadius: BorderRadius.circular(10)))),
+             const SizedBox(height: 20),
+             Text("Chỉnh sửa thiết bị", style: TextStyle(color: widget.theme.textMain, fontSize: 20, fontWeight: FontWeight.bold)),
+             const SizedBox(height: 8),
+             Text("ID: $deviceId", style: TextStyle(color: widget.theme.textSub, fontSize: 12)),
+             const SizedBox(height: 16),
+             TextField(
+               controller: nameController,
+               autofocus: true,
+               style: TextStyle(color: widget.theme.textMain),
+               decoration: InputDecoration(labelText: "Tên thiết bị", labelStyle: TextStyle(color: widget.theme.primary), filled: true, fillColor: widget.theme.background, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)),
+             ),
+             const SizedBox(height: 12),
+             Container(
+               padding: const EdgeInsets.symmetric(horizontal: 12),
+               decoration: BoxDecoration(color: widget.theme.background, borderRadius: BorderRadius.circular(12)),
+               child: DropdownButton<String>(
+                 value: selectedRoom, isExpanded: true, underline: const SizedBox(),
+                 dropdownColor: widget.theme.surface,
+                 style: TextStyle(color: widget.theme.textMain),
+                 items: rooms.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
+                 onChanged: (v) => setSheetState(() => selectedRoom = v!),
+               ),
+             ),
+             const SizedBox(height: 12),
+             Container(
+               padding: const EdgeInsets.symmetric(horizontal: 12),
+               decoration: BoxDecoration(color: widget.theme.background, borderRadius: BorderRadius.circular(12)),
+               child: DropdownButton<String>(
+                 value: selectedType, isExpanded: true, underline: const SizedBox(),
+                 dropdownColor: widget.theme.surface,
+                 style: TextStyle(color: widget.theme.textMain),
+                 items: types.entries.map((e) => DropdownMenuItem(value: e.key, child: Row(children: [Icon(_getIcon(e.key), color: _getColor(e.key), size: 20), const SizedBox(width: 8), Text(e.value)]))).toList(),
+                 onChanged: (v) => setSheetState(() => selectedType = v!),
+               ),
+             ),
+             const SizedBox(height: 20),
+             SizedBox(width: double.infinity, child: ElevatedButton(
+               style: ElevatedButton.styleFrom(backgroundColor: widget.theme.primary, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+               onPressed: () async {
+                 if (nameController.text.isNotEmpty) {
+                   Navigator.pop(context);
+                   bool ok = await ApiService.updateDevice(deviceId, {
+                     "name": nameController.text.trim(),
+                     "type": selectedType,
+                     "room": selectedRoom,
+                   });
+                   if (ok) {
+                     if (mounted) {
+                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("✅ Đã cập nhật: ${nameController.text}")));
+                     }
+                   } else {
+                     if (mounted) {
+                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("❌ Lỗi cập nhật thiết bị!")));
+                     }
+                   }
+                 }
+               },
+               child: const Text("Lưu thay đổi", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+             )),
+             const SizedBox(height: 30),
+           ]),
+         ),
+       ),
     );
   }
 
@@ -474,18 +660,86 @@ class _HomeTabState extends State<_HomeTab> {
           const SizedBox(height: 24),
           Text(widget.tr('my_devices'), style: TextStyle(color: widget.theme.textMain, fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
-          GridView.count(
-            shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), crossAxisCount: 2, childAspectRatio: 0.85, mainAxisSpacing: 16, crossAxisSpacing: 16,
-            children: [
-              _buildDeviceCard("Quạt Máy", "Phòng Khách", Icons.mode_fan_off, deviceStates["Smart Fan"]!, Colors.lightGreen, "Smart Fan"),
-              _buildDeviceCard("Đèn Phòng Khách", "Phòng Khách", Icons.lightbulb, deviceStates["Smart AC"]!, Colors.orange, "Smart AC"),
-              _buildDeviceCard("Đèn Phòng Ngủ", "Phòng Ngủ", Icons.bed, deviceStates["Smart Light"]!, Colors.yellow, "Smart Light"),
-              _buildDeviceCard("Front Door", "Entrance", Icons.lock, deviceStates["Front Door"]!, widget.theme.primary, "Front Door"),
-            ],
-          )
+          // 🔥 DYNAMIC: Gom nhóm thiết bị theo Phòng
+          devices.isEmpty && !isLoading
+            ? Center(child: Padding(
+                padding: const EdgeInsets.all(40),
+                child: Column(children: [
+                  Icon(Icons.devices_other, size: 60, color: widget.theme.textSub),
+                  const SizedBox(height: 12),
+                  Text("Chưa có thiết bị nào", style: TextStyle(color: widget.theme.textSub, fontSize: 16)),
+                  const SizedBox(height: 8),
+                  Text("Bấm nút + để thêm thiết bị mới", style: TextStyle(color: widget.theme.textSub, fontSize: 12)),
+                ]),
+              ))
+            : Column(children: _buildGroupedDevices()),
         ],
       ),
     );
+  }
+
+  // 🔥 Gom nhóm thiết bị theo Phòng, mỗi phòng có header + grid riêng
+  List<Widget> _buildGroupedDevices() {
+    // Nhóm thiết bị theo room
+    final Map<String, List<Map<String, dynamic>>> grouped = {};
+    for (final d in devices) {
+      final room = (d['room'] as String?)?.isNotEmpty == true ? d['room'] as String : 'Khác';
+      grouped.putIfAbsent(room, () => []);
+      grouped[room]!.add(d);
+    }
+
+    final List<Widget> widgets = [];
+    final roomIcons = {
+      'Phòng Khách': Icons.weekend, 'Phòng Ngủ': Icons.bed,
+      'Nhà Bếp': Icons.kitchen, 'Sân Vườn': Icons.yard,
+      'Phòng Tắm': Icons.bathtub, 'Entrance': Icons.door_front_door,
+    };
+
+    grouped.forEach((room, devicesInRoom) {
+      // Header phòng
+      widgets.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12, top: 8),
+          child: Row(children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(color: widget.theme.primary.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+              child: Icon(roomIcons[room] ?? Icons.room, color: widget.theme.primary, size: 16),
+            ),
+            const SizedBox(width: 10),
+            Text(room, style: TextStyle(color: widget.theme.textMain, fontSize: 15, fontWeight: FontWeight.w600)),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(color: widget.theme.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+              child: Text("${devicesInRoom.length}", style: TextStyle(color: widget.theme.primary, fontSize: 11, fontWeight: FontWeight.bold)),
+            ),
+          ]),
+        ),
+      );
+
+      // Grid 2 cột cho mỗi phòng
+      widgets.add(
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, childAspectRatio: 1.05, mainAxisSpacing: 10, crossAxisSpacing: 10),
+          itemCount: devicesInRoom.length,
+          itemBuilder: (context, index) {
+            final d = devicesInRoom[index];
+            final deviceId = d['device_id'] as String? ?? '';
+            final name = d['name'] as String? ?? deviceId;
+            final type = d['type'] as String? ?? 'unknown';
+            final isOn = d['status'] as bool? ?? false;
+            final hasFw = d['has_firmware'] as bool? ?? true;
+            return _buildDeviceCard(name, room, _getIcon(type), isOn, _getColor(type), deviceId, hasFw: hasFw);
+          },
+        ),
+      );
+      widgets.add(const SizedBox(height: 8));
+    });
+
+    return widgets;
   }
 
   Widget _buildEnvCard(String title, String value, String unit, IconData icon, Color color) {
@@ -496,9 +750,15 @@ class _HomeTabState extends State<_HomeTab> {
     );
   }
 
-  Widget _buildDeviceCard(String name, String room, IconData icon, bool isOn, Color color, String key) {
+  Widget _buildDeviceCard(String name, String room, IconData icon, bool isOn, Color color, String deviceId, {bool hasFw = true}) {
     return GestureDetector(
-      onTap: () => _toggleDevice(key, !isOn),
+      onTap: () {
+        if (!hasFw) {
+          showDialog(context: context, builder: (context) => AlertDialog(title: const Text("Cảnh báo"), content: const Text("Thiết bị này chưa cập nhật firmware, có thể không hoạt động ổn định."), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("OK"))]));
+        } else {
+          _toggleDevice(deviceId, !isOn);
+        }
+      },
       onLongPress: () {
         showModalBottomSheet(
           context: context,
@@ -518,22 +778,31 @@ class _HomeTabState extends State<_HomeTab> {
                   child: Text(name, style: TextStyle(color: widget.theme.textMain, fontSize: 18, fontWeight: FontWeight.bold)),
                 ),
                 ListTile(
+                  leading: const Icon(Icons.edit, color: Colors.blue),
+                  title: Text("Chỉnh sửa thiết bị", style: TextStyle(color: widget.theme.textMain)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showEditDeviceDialog(devices.firstWhere((d) => d['device_id'] == deviceId));
+                  },
+                ),
+                ListTile(
                   leading: const Icon(Icons.share, color: AppColors.primary),
                   title: Text("Chia sẻ thiết bị", style: TextStyle(color: widget.theme.textMain)),
                   onTap: () {
-                    Navigator.pop(context); 
+                    Navigator.pop(context);
                     Navigator.push(context, MaterialPageRoute(builder: (context) => ShareDeviceScreen(deviceName: name)));
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.settings, color: Colors.grey),
-                  title: Text("Cài đặt thiết bị", style: TextStyle(color: widget.theme.textMain)),
-                  onTap: () { Navigator.pop(context); },
-                ),
-                ListTile(
                   leading: const Icon(Icons.delete, color: Colors.red),
                   title: const Text("Xóa thiết bị", style: TextStyle(color: Colors.red)),
-                  onTap: () { Navigator.pop(context); },
+                  onTap: () async {
+                    Navigator.pop(context);
+                    bool ok = await ApiService.deleteDevice(deviceId);
+                    if (ok) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("🗑️ Đã xóa: $name")));
+                    }
+                  },
                 ),
                 const SizedBox(height: 20),
               ],
@@ -542,11 +811,35 @@ class _HomeTabState extends State<_HomeTab> {
         );
       },
       child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: widget.theme.surface, borderRadius: BorderRadius.circular(20), border: Border.all(color: isOn ? color.withOpacity(0.5) : Colors.transparent, width: 2), boxShadow: widget.theme.isDark ? [] : [BoxShadow(color: Colors.black12, blurRadius: 10, offset: const Offset(0, 5))]),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(color: widget.theme.surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: isOn ? color.withOpacity(0.5) : Colors.transparent, width: 2), boxShadow: widget.theme.isDark ? [] : [BoxShadow(color: Colors.black12, blurRadius: 10, offset: const Offset(0, 5))]),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Icon(icon, color: isOn ? color : Colors.grey, size: 30), Switch(value: isOn, onChanged: (v) => _toggleDevice(key, v), activeColor: color)]),
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(name, style: TextStyle(color: widget.theme.textMain, fontWeight: FontWeight.bold, fontSize: 16)), Text(room, style: TextStyle(color: widget.theme.textSub, fontSize: 12)), const SizedBox(height: 4), Text(isOn ? "On" : "Off", style: TextStyle(color: isOn ? color : Colors.grey, fontWeight: FontWeight.bold))])
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(icon, color: isOn ? color : Colors.grey, size: 24),
+                if (!hasFw) Positioned(
+                  top: -8,
+                  right: -8,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(color: Colors.amber, shape: BoxShape.circle),
+                    child: const Icon(Icons.priority_high, color: Colors.white, size: 8),
+                  ),
+                ),
+              ],
+            ),
+            Transform.scale(scale: 0.8, child: Switch(value: isOn, onChanged: (v) => _toggleDevice(deviceId, v), activeColor: color)),
+          ]),
+          Flexible(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            Row(children: [
+              Flexible(child: Text(name, style: TextStyle(color: widget.theme.textMain, fontWeight: FontWeight.bold, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis)),
+              if (!hasFw) Padding(padding: const EdgeInsets.only(left: 4), child: Icon(Icons.warning_amber_rounded, color: Colors.amber[700], size: 12)),
+            ]),
+            const SizedBox(height: 2),
+            Text(isOn ? "On" : "Off", style: TextStyle(color: isOn ? color : Colors.grey, fontWeight: FontWeight.bold, fontSize: 12)),
+          ])),
         ]),
       ),
     );

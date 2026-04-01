@@ -4,6 +4,84 @@ import 'package:http/http.dart' as http;
 import '../utils/constants.dart';
 
 class ApiService {
+  static final _defaultHeaders = {
+    "Bypass-Tunnel-Reminder": "true",
+    "ngrok-skip-browser-warning": "true",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  };
+
+  // === DYNAMIC DEVICE REGISTRY ===
+
+  // Lấy toàn bộ danh sách thiết bị từ DB
+  static Future<List<Map<String, dynamic>>> getAllDevices() async {
+    try {
+      final url = '${Constants.baseUrl}/devices';
+      print("🚀 DEBUG getAllDevices: $url");
+      final response = await http.get(
+        Uri.parse(url),
+        headers: _defaultHeaders,
+      ).timeout(const Duration(seconds: 15));
+      print("📥 getAllDevices status: ${response.statusCode}");
+      if (response.statusCode == 200) {
+        final list = jsonDecode(response.body) as List<dynamic>;
+        print("📥 getAllDevices count: ${list.length}");
+        return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
+    } catch (e) {
+      print("❌ Lỗi lấy danh sách thiết bị: $e");
+    }
+    return [];
+  }
+
+  // Tạo thiết bị mới
+  static Future<bool> createDevice(Map<String, dynamic> data) async {
+    try {
+      final url = '${Constants.baseUrl}/devices';
+      print("🚀 DEBUG createDevice: $url data=$data");
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {..._defaultHeaders, "Content-Type": "application/json"},
+        body: jsonEncode(data),
+      ).timeout(const Duration(seconds: 15));
+      print("📥 createDevice status: ${response.statusCode} body: ${response.body}");
+      return response.statusCode == 200;
+    } catch (e) {
+      print("❌ Lỗi tạo thiết bị: $e");
+      return false;
+    }
+  }
+
+  // Xóa thiết bị
+  static Future<bool> deleteDevice(String deviceId) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('${Constants.baseUrl}/devices/$deviceId'),
+        headers: _defaultHeaders,
+      ).timeout(const Duration(seconds: 15));
+      return response.statusCode == 200;
+    } catch (e) {
+      print("Lỗi xóa thiết bị: $e");
+      return false;
+    }
+  }
+
+  // Cập nhật thông tin thiết bị (Đổi tên, phòng, loại)
+  static Future<bool> updateDevice(String deviceId, Map<String, dynamic> data) async {
+    try {
+      final response = await http.put(
+        Uri.parse('${Constants.baseUrl}/devices/$deviceId'),
+        headers: {..._defaultHeaders, "Content-Type": "application/json"},
+        body: jsonEncode(data),
+      ).timeout(const Duration(seconds: 15));
+      return response.statusCode == 200;
+    } catch (e) {
+      print("Lỗi cập nhật thiết bị: $e");
+      return false;
+    }
+  }
+
+  // === CÁC API CŨ ===
+
   // Gửi lệnh Bật/Tắt
   static Future<bool> toggleDevice(String deviceId, bool status) async {
     try {

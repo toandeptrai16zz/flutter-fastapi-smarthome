@@ -100,11 +100,17 @@ void setup() {
 
   client.setServer(mqtt_server, mqtt_port);
   client.setCallback(callback);
+
+  // Khởi động nạp code không dây OTA
+  ArduinoOTA.setHostname("SmartHome-ESP32");
+  ArduinoOTA.begin();
 }
 
 unsigned long lastSensorTime = 0;
 
 void loop() {
+  ArduinoOTA.handle(); // Xử lý tín hiệu nạp code không dây liên tục
+
   if (WiFi.status() != WL_CONNECTED) {
     setup_wifi();
   }
