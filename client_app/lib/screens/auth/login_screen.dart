@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../home/dashboard_screen.dart'; 
 import 'forgot_password_screen.dart'; 
+import 'register_screen.dart'; // Import màn hình đăng ký
 import '../../utils/constants.dart';
+import '../../services/auth_service.dart'; // Import AuthService
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -12,9 +14,11 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  // Controller để lấy dữ liệu nhập (nếu cần xử lý logic sau này)
+  // Controller để lấy dữ liệu nhập
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passController = TextEditingController();
+  
+  bool _isLoading = false;
 
   void _showServerConfigDialog() {
     final TextEditingController urlController = TextEditingController(text: Constants.baseUrl);
@@ -70,6 +74,39 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  void _login() async {
+    final email = _emailController.text.trim();
+    final pass = _passController.text.trim();
+
+    if (email.isEmpty || pass.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Vui lòng nhập đầy đủ Email và Mật khẩu")));
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    
+    // Gọi API Đăng nhập
+    final result = await AuthService.login(email, pass);
+    
+    setState(() => _isLoading = false);
+
+    if (mounted) {
+      if (result['success']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+           SnackBar(content: Text(result['message']), backgroundColor: Colors.green)
+        );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const DashboardScreen()),
+        );
+      } else {
+         ScaffoldMessenger.of(context).showSnackBar(
+           SnackBar(content: Text(result['message'] ?? 'Lỗi đăng nhập'), backgroundColor: Colors.red)
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // Lấy theme động (Sáng/Tối)
@@ -89,10 +126,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   IconButton(
                     icon: Icon(Icons.arrow_back, color: theme.textMain),
-                    onPressed: () {}, // Màn hình đầu tiên nên không cần back, hoặc để trống
+                    onPressed: () {}, 
                   ),
                   Text("Smart Control", style: TextStyle(color: theme.textMain, fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(width: 48), // Placeholder cân giữa
+                  const SizedBox(width: 48), 
                 ],
               ),
               const SizedBox(height: 40),
@@ -153,25 +190,40 @@ class _LoginScreenState extends State<LoginScreen> {
                     elevation: 5,
                     shadowColor: AppColors.primary.withOpacity(0.4),
                   ),
-                  onPressed: () {
-                    // Chuyển trang sang Dashboard
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(builder: (context) => const DashboardScreen()),
-                    );
-                  },
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text("Đăng nhập", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-                      SizedBox(width: 8),
-                      Icon(Icons.arrow_forward, color: Colors.white, size: 20),
-                    ],
-                  ),
+                  onPressed: _isLoading ? null : _login,
+                  child: _isLoading 
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text("Đăng nhập", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                            SizedBox(width: 8),
+                            Icon(Icons.arrow_forward, color: Colors.white, size: 20),
+                          ],
+                        ),
                 ),
               ),
 
-              const SizedBox(height: 30),
+              const SizedBox(height: 20),
+              
+              // NÚT CHUYỂN SANG ĐĂNG KÝ
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text("Bạn chưa có tài khoản?", style: TextStyle(color: theme.textMain)),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const RegisterScreen()),
+                      );
+                    },
+                    child: const Text("Đăng ký ngay", style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 20),
 
               // 5. Divider "Hoặc"
               Row(
@@ -187,7 +239,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 30),
 
-             // 6. NÚT SOCIAL LOGIN (ĐÃ SỬA LOGO GOOGLE CHUẨN)
+             // 6. NÚT SOCIAL LOGIN 
               SizedBox(
                 width: double.infinity,
                 height: 56,
@@ -203,12 +255,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // ✅ DÙNG ẢNH MẠNG ĐỂ HIỂN THỊ LOGO ĐA SẮC
                       Image.network(
                         "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/768px-Google_%22G%22_logo.svg.png",
                         height: 24,
                         width: 24,
-                        errorBuilder: (context, error, stackTrace) => const Icon(Icons.g_mobiledata, color: Colors.red), // Nếu mất mạng thì hiện tạm icon cũ
+                        errorBuilder: (context, error, stackTrace) => const Icon(Icons.g_mobiledata, color: Colors.red), 
                       ),
                       const SizedBox(width: 12),
                       Text("Tiếp tục với Google", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.textMain)),
@@ -230,7 +281,7 @@ class _LoginScreenState extends State<LoginScreen> {
       decoration: BoxDecoration(
         color: theme.surface, 
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: theme.border), // Thêm viền mờ cho đẹp
+        border: Border.all(color: theme.border), 
       ),
       child: TextField(
         controller: controller,

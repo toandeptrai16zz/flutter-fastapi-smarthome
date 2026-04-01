@@ -6,3 +6,6 @@ motor
 pymongo[srv]
 paho-mqtt
 python-dotenv
+passlib[bcrypt]
+PyJWT
+email-validator

@@ -9,6 +9,7 @@ class MQTTService:
         self.task = None
         self.connected = False
         self.loop = None  # Giữ luồng chính
+        self.last_ai_alert_time = 0.0 # Lưu thời điểm cảnh báo AI cuối cùng
 
     async def start(self):
         print(f"Connecting to MQTT Broker at {settings.MQTT_BROKER_URL}:{settings.MQTT_BROKER_PORT}...")
@@ -49,20 +50,70 @@ class MQTTService:
         # Nếu nhận dữ liệu từ cảm biến
         if topic.startswith("smarthome/sensors/"):
             import json
+            import time
             from datetime import datetime
             from app.core.database import db
             from app.main import ws_manager
             try:
                 data = json.loads(payload)
                 sensor_id = topic.split("/")[2]
-                
+                temp = data.get("temperature", 0.0)
+                hum = data.get("humidity", 0.0)
+
+                # KIỂM TRA NHIỆT ĐỘ CÓ QUÁ NÓNG (>=31 ĐỘ C) ĐỂ GỌI AI
+                current_time = time.time()
+                if temp >= 31.0 and (current_time - self.last_ai_alert_time > 10):  # 10s = Test mode (Đổi về 600s sau)
+                    self.last_ai_alert_time = current_time
+                    async def process_ai():
+                        import google.generativeai as genai
+                        from app.core.config import settings
+                        from app.services.websocket_manager import ws_manager
+                        try:
+                            if not settings.GEMINI_API_KEY:
+                                raise ValueError("Missing GEMINI_API_KEY in settings")
+                            genai.configure(api_key=settings.GEMINI_API_KEY)
+                            model = genai.GenerativeModel('gemini-2.5-flash', generation_config={"response_mime_type": "application/json"})
+                            prompt = f"""
+Nhiệt độ hiện tại trong nhà là {temp}°C, độ ẩm {hum}%.
+Hãy đóng vai một trợ lý AI quản gia thông minh.
+Vì thời tiết đang khá nóng (trên 31 độ), hãy quyết định BẬT 'Quạt Máy' (thiết lập fan_action là true).
+Đồng thời, tạo một câu thông báo ngắn gọn bằng tiếng Việt vui vẻ, thân thiện (dưới 15 chữ) cho người dùng biết bạn vừa tự bật quạt giúp họ làm mát.
+Đáp ứng đúng JSON duy nhất như sau: {{"fan_action": true, "message": "Câu thông báo"}}
+"""
+                            # Tránh block main loop
+                            response = await asyncio.to_thread(model.generate_content, prompt)
+                            result_text = response.text.strip()
+                            if result_text.startswith("```json"):
+                                result_text = result_text[7:-3]
+                            ai_result = json.loads(result_text)
+                            if ai_result.get("fan_action"):
+                                print(f"🤖 AI quyết định bật quạt: {ai_result.get('message')}")
+                                await self.publish("smarthome/devices/fan_1/control", "ON")
+                                await ws_manager.broadcast({
+                                    "type": "ai_alert",
+                                    "message": ai_result.get("message", "Nóng quá! Nhỏ AI bật Quạt cho anh nha!"),
+                                    "device_id": "fan_1",
+                                    "status": True
+                                })
+                        except Exception as ai_e:
+                            print(f"❌ Lỗi xử lý AI Tự động làm mát: {ai_e}")
+                            await ws_manager.broadcast({
+                                "type": "ai_alert",
+                                "message": f"Lỗi AI Backend: {ai_e}",
+                                "device_id": "fan_1",
+                                "status": False
+                            })
+
+                    if self.loop is not None and self.loop.is_running():
+                        asyncio.run_coroutine_threadsafe(process_ai(), self.loop)
+
                 async def save_and_broadcast_sensor():
                     # 1. Lưu MongoDB
                     if db.db is not None:
                         await db.db["sensors"].insert_one({
                             "device_id": sensor_id,
-                            "temperature": data.get("temperature", 0.0),
-                            "humidity": data.get("humidity", 0.0),
+                            "temperature": temp,
+                            "humidity": hum,
                             "timestamp": datetime.utcnow()
                         })
                         print(f"✅ Lưu DB thành công cảm biến {sensor_id}: {data}")
@@ -70,8 +121,8 @@ class MQTTService:
                     from app.services.websocket_manager import ws_manager
                     await ws_manager.broadcast({
                         "type": "sensor",
-                        "temperature": data.get("temperature", 0.0),
-                        "humidity": data.get("humidity", 0.0)
+                        "temperature": temp,
+                        "humidity": hum
                     })
                     print(f"📡 Đã phát broadcast cảm biến {sensor_id} tới WebSocket")
 

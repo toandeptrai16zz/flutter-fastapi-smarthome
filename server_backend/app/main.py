@@ -14,6 +14,7 @@ import google.generativeai as genai
 
 # Import WebSocket Manager từ file riêng (tránh circular import)
 from app.services.websocket_manager import ws_manager
+from app.api import auth
 
 class ChatRequest(BaseModel):
     message: str
@@ -56,6 +57,17 @@ async def run_scheduler_loop():
                     {"device_id": device_id},
                     {"$set": {"status": action, "updated_at": datetime.utcnow()}}
                 )
+                await db.db["device_logs"].insert_one({
+                    "device_id": device_id,
+                    "status": action,
+                    "timestamp": datetime.utcnow()
+                })
+                # Báo cho Flutter app để cập nhật UI ngay lập tức
+                await ws_manager.broadcast({
+                    "type": "device_update",
+                    "device_id": device_id,
+                    "status": action
+                })
                 
                 if len(sch.get("repeated_days", [])) == 0:
                     await collection.update_one({"_id": sch["_id"]}, {"$set": {"is_active": False}})
@@ -91,6 +103,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+
 
 
 @app.get("/")

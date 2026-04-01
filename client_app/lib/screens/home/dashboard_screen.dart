@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async'; // Bổ sung thư viện cho Timer
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_tts/flutter_tts.dart';
 import '../../theme/app_theme.dart';
@@ -48,6 +49,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
   String _currentLang = 'vi';
   bool _isDarkMode = true;
+  String _userName = "";
+  String _userEmail = "";
 
   void _changeLanguage(String langCode) => setState(() => _currentLang = langCode);
   void _toggleTheme(bool isDark) => setState(() => _isDarkMode = isDark);
@@ -67,6 +70,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _speech = stt.SpeechToText();
     _flutterTts = FlutterTts();
     _initTts();
+    _loadUserInfo();
+  }
+
+  void _loadUserInfo() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _userName = prefs.getString('user_name') ?? "Khách";
+      _userEmail = prefs.getString('user_email') ?? "guest@aiot.vn";
+    });
   }
 
   void _initTts() async {
@@ -177,10 +189,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final themeColors = AppThemeColors(_isDarkMode);
 
     final List<Widget> screens = [
-      _HomeTab(lang: _currentLang, tr: tr, theme: themeColors),      
+      _HomeTab(lang: _currentLang, tr: tr, theme: themeColors, userName: _userName),      
       AutomationTab(lang: _currentLang, tr: tr, theme: themeColors), 
       _AnalyticsTab(lang: _currentLang, tr: tr, theme: themeColors), 
-      _SettingsTab(lang: _currentLang, tr: tr, theme: themeColors, onLanguageChanged: _changeLanguage, isDarkMode: _isDarkMode, onThemeChanged: _toggleTheme),  
+      _SettingsTab(lang: _currentLang, tr: tr, theme: themeColors, onLanguageChanged: _changeLanguage, isDarkMode: _isDarkMode, onThemeChanged: _toggleTheme, userName: _userName, userEmail: _userEmail),  
     ];
 
     return Scaffold(
@@ -270,7 +282,8 @@ class _HomeTab extends StatefulWidget {
   final String lang;
   final Function(String) tr;
   final AppThemeColors theme;
-  const _HomeTab({required this.lang, required this.tr, required this.theme});
+  final String userName;
+  const _HomeTab({required this.lang, required this.tr, required this.theme, required this.userName});
 
   @override
   State<_HomeTab> createState() => _HomeTabState();
@@ -283,7 +296,7 @@ class _HomeTabState extends State<_HomeTab> {
   StreamSubscription? _wsSubscription; // WebSocket listener thay thế Timer
 
   Map<String, bool> deviceStates = {
-    "Smart AC": false, "Smart Light": false, "Front Door": true, "Sensor Hub": false,
+    "Smart AC": false, "Smart Light": false, "Smart Fan": false, "Front Door": true, "Sensor Hub": false,
   };
 
   @override
@@ -313,6 +326,17 @@ class _HomeTabState extends State<_HomeTab> {
           if (deviceId == 'led_1') deviceStates["Smart AC"] = status;
           if (deviceId == 'led_2') deviceStates["Smart Light"] = status;
         });
+      } else if (type == 'ai_alert') {
+        final message = data['message'] as String? ?? "AI Alert";
+        setState(() {
+          deviceStates["Smart Fan"] = data['status'] as bool? ?? true;
+        });
+        showDialog(context: context, builder: (context) => AlertDialog(
+          backgroundColor: widget.theme.surface,
+          title: Row(children: [const Icon(Icons.smart_toy, color: Colors.blue), const SizedBox(width: 8), Text("Trợ lý AI", style: TextStyle(color: widget.theme.textMain))]),
+          content: Text(message, style: TextStyle(color: widget.theme.textSub)),
+          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Đã hiểu"))]
+        ));
       } else if (type == 'esp32_status') {
         // Trạng thái thống báo trực tiếp từ phần cứng ESP32
         setState(() {
@@ -369,6 +393,7 @@ class _HomeTabState extends State<_HomeTab> {
     String deviceId = "";
     if (key == "Smart AC") deviceId = "led_1";
     if (key == "Smart Light") deviceId = "led_2";
+    if (key == "Smart Fan") deviceId = "fan_1";
     
     if (deviceId.isNotEmpty) {
       bool success = await ApiService.toggleDevice(deviceId, newState);
@@ -430,7 +455,7 @@ class _HomeTabState extends State<_HomeTab> {
               Row(children: [
                   Container(width: 45, height: 45, decoration: BoxDecoration(shape: BoxShape.circle, color: widget.theme.surface, border: Border.all(color: widget.theme.primary)), child: Icon(Icons.person, color: widget.theme.textMain)),
                   const SizedBox(width: 12),
-                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(widget.tr('welcome'), style: TextStyle(color: widget.theme.textSub, fontSize: 12)), Text("Alex Johnson", style: TextStyle(color: widget.theme.textMain, fontSize: 20, fontWeight: FontWeight.bold))]),
+                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(widget.tr('welcome'), style: TextStyle(color: widget.theme.textSub, fontSize: 12)), Text(widget.userName, style: TextStyle(color: widget.theme.textMain, fontSize: 20, fontWeight: FontWeight.bold))]),
               ]),
               GestureDetector(onTap: _showAddDeviceDialog, child: CircleAvatar(backgroundColor: widget.theme.surface, child: Icon(Icons.add, color: widget.theme.primary))),
           ]),
@@ -442,10 +467,10 @@ class _HomeTabState extends State<_HomeTab> {
           GridView.count(
             shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), crossAxisCount: 2, childAspectRatio: 0.85, mainAxisSpacing: 16, crossAxisSpacing: 16,
             children: [
+              _buildDeviceCard("Quạt Máy", "Phòng Khách", Icons.mode_fan_off, deviceStates["Smart Fan"]!, Colors.lightGreen, "Smart Fan"),
               _buildDeviceCard("Đèn Phòng Khách", "Phòng Khách", Icons.lightbulb, deviceStates["Smart AC"]!, Colors.orange, "Smart AC"),
               _buildDeviceCard("Đèn Phòng Ngủ", "Phòng Ngủ", Icons.bed, deviceStates["Smart Light"]!, Colors.yellow, "Smart Light"),
               _buildDeviceCard("Front Door", "Entrance", Icons.lock, deviceStates["Front Door"]!, widget.theme.primary, "Front Door"),
-              _buildDeviceCard("Sensor Hub", "Kitchen", Icons.sensors_off, false, Colors.grey, "Sensor Hub"),
             ],
           )
         ],
@@ -565,8 +590,10 @@ class _SettingsTab extends StatefulWidget {
   final AppThemeColors theme;
   final bool isDarkMode;
   final Function(bool) onThemeChanged;
+  final String userName;
+  final String userEmail;
 
-  const _SettingsTab({required this.lang, required this.tr, required this.onLanguageChanged, required this.theme, required this.isDarkMode, required this.onThemeChanged});
+  const _SettingsTab({required this.lang, required this.tr, required this.onLanguageChanged, required this.theme, required this.isDarkMode, required this.onThemeChanged, required this.userName, required this.userEmail});
 
   @override
   State<_SettingsTab> createState() => _SettingsTabState();
@@ -595,7 +622,7 @@ class _SettingsTabState extends State<_SettingsTab> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: widget.theme.surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: widget.theme.border)), child: Row(children: [Container(width: 60, height: 60, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: widget.theme.primary), color: Colors.grey[800]), child: const Icon(Icons.person, color: Colors.white, size: 30)), const SizedBox(width: 16), Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("Nguyễn Văn A", style: TextStyle(color: widget.theme.textMain, fontSize: 18, fontWeight: FontWeight.bold)), Text("admin@aiot.vn", style: TextStyle(color: widget.theme.textSub, fontSize: 14))])])),
+          Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: widget.theme.surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: widget.theme.border)), child: Row(children: [Container(width: 60, height: 60, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: widget.theme.primary), color: Colors.grey[800]), child: const Icon(Icons.person, color: Colors.white, size: 30)), const SizedBox(width: 16), Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(widget.userName, style: TextStyle(color: widget.theme.textMain, fontSize: 18, fontWeight: FontWeight.bold)), Text(widget.userEmail, style: TextStyle(color: widget.theme.textSub, fontSize: 14))])])),
           const SizedBox(height: 24),
           _buildSection(widget.tr('general')),
           _buildItem(Icons.notifications, widget.tr('push_notif'), hasSwitch: true, value: _notifEnabled, onChanged: (v) => setState(() => _notifEnabled = v), color: Colors.blue),
