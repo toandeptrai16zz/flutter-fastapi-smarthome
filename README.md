@@ -88,13 +88,13 @@ lib/
 
 ## 📝 Kế hoạch tiếp theo
 
-- **Phát triển Backend (Server Python):**
+- **Phát triển Backend (Server Python)-(Đã phát triển)**
     - Xây dựng API server bằng Flask hoặc FastAPI.
     - Tích hợp cơ sở dữ liệu để quản lý người dùng và trạng thái thiết bị.
-- **Tích hợp phần cứng IoT:**
+- **Tích hợp phần cứng IoT-(Đã phát triển)**
     - Lập trình vi điều khiển ESP32/ESP8266.
     - Thiết lập giao tiếp bằng MQTT hoặc WebSockets.
-- **Đồng bộ hóa thời gian thực:**
+- **Đồng bộ hóa thời gian thực-(Đã phát triển)**
     - Triển khai cập nhật trạng thái thời gian thực giữa ứng dụng di động và thiết bị IoT.
-
+-**Đọc Doc trong dự án để biết thêm thông tin**
 > "Dự án đang trong quá trình phát triển. Các tính năng và giao diện có thể thay đổi trong các phiên bản tương lai."
