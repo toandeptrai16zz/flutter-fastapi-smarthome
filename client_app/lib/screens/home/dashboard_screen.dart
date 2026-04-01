@@ -107,11 +107,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _spokenText = "";
           _aiReply = "";
         });
+        
+        // Quét tự động danh sách ngôn ngữ trong máy của ông
+        String finalLocale = "vi_VN";
+        try {
+            var locales = await _speech.locales();
+            for (var locale in locales) {
+                if (locale.localeId.toLowerCase().startsWith('vi')) {
+                    finalLocale = locale.localeId;
+                    break;
+                }
+            }
+        } catch (e) {
+             print("Lỗi quét locale: $e");
+        }
+
         _speech.listen(
           onResult: (val) => setState(() {
             _spokenText = val.recognizedWords;
           }),
-          localeId: "vi_VN",
+          localeId: finalLocale,
         );
       }
     } else {
@@ -337,12 +352,7 @@ class _HomeTabState extends State<_HomeTab> {
           content: Text(message, style: TextStyle(color: widget.theme.textSub)),
           actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Đã hiểu"))]
         ));
-      } else if (type == 'esp32_status') {
-        // Trạng thái thống báo trực tiếp từ phần cứng ESP32
-        setState(() {
-          deviceStates["Smart AC"] = data['relay1'] as bool? ?? false;
-          deviceStates["Smart Light"] = data['relay2'] as bool? ?? false;
-        });
+      // Đã gỡ bỏ block `esp32_status` gây lỗi nhảy nút giao diện do nhận sai dữ liệu rác từ HiveMQ public.
       } else if (type == 'init') {
         // Snapshot ban đầu khi vừa kết nối WS
         final sensor = data['sensor'] as Map<String, dynamic>?;

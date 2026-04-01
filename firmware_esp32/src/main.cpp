@@ -5,6 +5,7 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 #include <WiFiManager.h>
+#include <ArduinoOTA.h> // Hỗ trợ nạp code không dây OTA
 
 // --- MQTT ---
 const char *mqtt_server = "broker.hivemq.com";

@@ -10,9 +10,8 @@ from pydantic import BaseModel
 from app.models.schedule import ScheduleCreate
 from app.core.config import settings
 import json
-import google.generativeai as genai
-
-# Import WebSocket Manager từ file riêng (tránh circular import)
+import json
+from groq import AsyncGroq
 from app.services.websocket_manager import ws_manager
 from app.api import auth
 
@@ -306,16 +305,15 @@ async def toggle_schedule(schedule_id: str):
     await collection.update_one({"_id": ObjectId(schedule_id)}, {"$set": {"is_active": new_status}})
     return {"message": "Đã đổi trạng thái", "is_active": new_status}
 
-# --- TRỢ LÝ AI (GEMINI) ---
+# --- TRỢ LÝ AI (GROQ TỐC ĐỘ BÀN THỜ) ---
 @app.post("/ai/chat")
 async def ai_chat(req: ChatRequest):
-    """Trợ lý ảo xử lý ra lệnh bằng giọng nói (Text)"""
-    if not settings.GEMINI_API_KEY:
-        return {"reply": "Chưa cài đặt API Key cho AI.", "device_id": "none", "action": False}
+    """Trợ lý ảo xử lý ra lệnh bằng giọng nói (Text) dùng CÔNG NGHỆ LPU SIÊU NHANH CỦA GROQ."""
+    if not hasattr(settings, 'GROQ_API_KEY') or not settings.GROQ_API_KEY:
+         return {"reply": "Chưa cài đặt biến môi trường GROQ_API_KEY. Bạn lên console.groq.com tạo API Key lấy 1 giây nhé!", "device_id": "none", "action": False}
     
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-    # Dùng gemini-2.5-flash cho tốc độ phản hồi cực nhanh -> tối ưu trải nghiệm Assistant
-    model = genai.GenerativeModel('gemini-2.5-flash')
+    # Khởi tạo client Groq
+    groq_client = AsyncGroq(api_key=settings.GROQ_API_KEY)
     
     prompt = f"""Bạn tên là "Nhà" — trợ lý ảo của hệ thống nhà thông minh AIoT SmartHome.
 Tính cách: Bạn nói chuyện như một người bạn thân, vui vẻ, tự nhiên, hài hước nhẹ nhàng, KHÔNG cứng nhắc hay lễ phép quá mức. Dùng ngôn ngữ đời thường, gần gũi kiểu gen Z Việt Nam. Có thể dùng emoji khi phù hợp.
@@ -328,11 +326,11 @@ DANH SÁCH THIẾT BỊ bạn điều khiển được:
 - "fan_1": Quạt Máy (còn gọi: quạt, fan, quạt phòng khách)
 
 QUY TẮC:
-1. Nếu người dùng muốn BẬT/TẮT thiết bị → trả device_id tương ứng, action = true (bật) hoặc false (tắt).
-2. Nếu người dùng nói "bật/tắt hết", "tắt tất cả", "bật hết đèn"... → chọn thiết bị phù hợp nhất, hoặc trả device_id="all".
-3. Nếu người dùng chỉ nói chuyện bình thường, hỏi thăm, tâm sự, hoặc hỏi gì đó không liên quan thiết bị → vẫn trả lời vui vẻ như bạn bè, device_id="none", action=false.
-4. Nếu người dùng hỏi về thời tiết, nhiệt độ, độ ẩm → bảo họ xem trên dashboard, device_id="none".
-5. Câu trả lời phải ngắn gọn, tự nhiên, KHÔNG lễ phép kiểu "Dạ thưa", mà nói như bạn bè thân: "Oke", "Xong rồi nha", "Bật rồi đó", "Tắt hết cho rồi nè"...
+1. Nếu muốn BẬT/TẮT thiết bị → trả JSON với device_id tương ứng, action = true (bật) hoặc false (tắt).
+2. "bật/tắt hết", "tắt tất cả" → chọn thiết bị phù hợp nhất hoặc device_id="all".
+3. Nếu người dùng chỉ nói chuyện bình thường, hỏi thăm, tâm sự → trả lời vui vẻ, device_id="none", action=false.
+4. Yêu cầu thời tiết, nhiệt độ → bảo họ xem dashboard, device_id="none".
+5. Câu trả lời cực ngắn gọn, tự nhiên như bạn bè.
 
 Trả về ĐÚNG 1 chuỗi JSON, KHÔNG markdown, KHÔNG text thừa:
 {{
@@ -342,8 +340,13 @@ Trả về ĐÚNG 1 chuỗi JSON, KHÔNG markdown, KHÔNG text thừa:
 }}
 """
     try:
-        response = model.generate_content(prompt)
-        text = response.text.replace("```json", "").replace("```", "").strip()
+        response = await groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3
+        )
+        
+        text = response.choices[0].message.content.replace("```json", "").replace("```", "").strip()
         data = json.loads(text)
         
         device_id = data.get("device_id")
@@ -375,5 +378,4 @@ Trả về ĐÚNG 1 chuỗi JSON, KHÔNG markdown, KHÔNG text thừa:
         return {"reply": reply, "device_id": device_id, "action": action}
     except Exception as e:
         print(f"Lỗi AI: {e}")
-        return {"reply": "Dạ, hiện tại em đang bị lỗi kết nối mạng não bộ ạ.", "device_id": "none", "action": False}
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"reply": f"Dạ, em bị lỗi não bộ: {str(e)}", "device_id": "none", "action": False}
