@@ -48,24 +48,18 @@ class MQTTService:
         payload = msg.payload.decode()
         print(f"📥 Received: {topic} = {payload}")
         
-        # Nếu nhận dữ liệu từ cảm biến
-        if topic.startswith("smarthome/sensors/"):
+        # === XỬ LÝ CẢM BIẾN PIR (topic riêng) ===
+        if topic == "smarthome/sensors/pir/data":
             import json
             import time
             from datetime import datetime
-            from app.core.database import db
             try:
                 data = json.loads(payload)
-                from app.services.websocket_manager import ws_manager # Import tại đây để tránh vòng lặp
-                sensor_id = topic.split("/")[2]
-                temp = data.get("temperature", 0.0)
-                hum = data.get("humidity", 0.0)
                 motion = data.get("motion", False)
-
                 current_time = time.time()
                 
-                # --- AI INTERVENTION: SECURITY ALERT (CHỐNG TRỘM) ---
-                if motion and (current_time - self.last_ai_alert_time > 15):
+                # Chỉ kích hoạt AI Security khi PIR phát hiện chuyển động + cooldown 120s
+                if motion and (current_time - self.last_ai_alert_time > 120):
                     self.last_ai_alert_time = current_time
                     async def process_security_ai():
                         from groq import AsyncGroq
@@ -89,8 +83,8 @@ Trả về JSON duy nhất: {{"is_threat": true/false, "action": "turn_on_lights
                             
                             print(f"🚨 AI Security Alert: {ai_result.get('message')}")
                             if ai_result.get("is_threat"):
-                                await self.publish("smarthome/devices/den_phong_khach/control", "ON") # Bật đèn khách
-                                await self.publish("smarthome/camera/flash", "ON") # Bật Flash sáng chói lóa trên ESP32-CAM!
+                                await self.publish("smarthome/devices/den_phong_khach/control", "ON")
+                                await self.publish("smarthome/camera/flash", "ON")
                             
                             await ws_manager.broadcast({
                                 "type": "ai_alert",
@@ -102,9 +96,26 @@ Trả về JSON duy nhất: {{"is_threat": true/false, "action": "turn_on_lights
 
                     if self.loop is not None and self.loop.is_running():
                         asyncio.run_coroutine_threadsafe(process_security_ai(), self.loop)
+            except Exception as e:
+                print(f"❌ Lỗi xử lý PIR: {e}")
+
+        # === XỬ LÝ CẢM BIẾN NHIỆT ĐỘ/ĐỘ ẨM (DHT) ===
+        elif topic == "smarthome/sensors/dht11/data":
+            import json
+            import time
+            from datetime import datetime
+            from app.core.database import db
+            try:
+                data = json.loads(payload)
+                from app.services.websocket_manager import ws_manager
+                sensor_id = topic.split("/")[2]
+                temp = data.get("temperature", 0.0)
+                hum = data.get("humidity", 0.0)
+
+                current_time = time.time()
 
                 # --- AI INTERVENTION: COOLING (LÀM MÁT) ---
-                if temp >= 31.0 and (current_time - self.last_ai_alert_time > 10):  # 10s = Test mode (Đổi về 600s sau)
+                if temp >= 31.0 and (current_time - self.last_ai_alert_time > 600):
                     self.last_ai_alert_time = current_time
                     async def process_ai():
                         from groq import AsyncGroq
@@ -172,58 +183,57 @@ Trả về ĐÚNG 1 JSON, KHÔNG markdown: {{"fan_action": true, "message": "Câ
             except Exception as e:
                 print(f"❌ Lỗi xử lý data cảm biến: {e}")
 
-        # Nếu nhận trạng thái thiết bị từ ESP32
+        # Nếu nhận trạng thái thiết bị từ ESP32 (nút bấm vật lý)
         elif topic.startswith("smarthome/devices/") and topic.endswith("/status"):
             try:
                 import json
                 from app.services.websocket_manager import ws_manager
                 device_data = json.loads(payload)
                 async def broadcast_device_status():
-                    # 1. Map relays to device_ids (assuming mapping logic or just save raw flags to board)
-                    # Hoặc cập nhật thiết bị có gpio_pin D1, D2 tương ứng với relay1, relay2
                     from app.core.database import db
+                    from datetime import datetime
                     if db.db is not None:
-                        # Tra cứu thiết bị nào đang đấu vào D1, D2, D3, D4
-                        from app.core.config import settings
                         collection = db.db["devices"]
                         all_devices = await collection.find({}).to_list(100)
                         
-                        relay_map = {
-                            "D1": device_data.get("relay1"),
-                            "D2": device_data.get("relay2"),
-                            "D3": device_data.get("relay3"),
-                            "D4": device_data.get("relay4"),
+                        # Map trực tiếp relay → GPIO pin number (Nguồn sự thật từ firmware)
+                        # relay1 = D7 = GPIO 13, relay2 = D6 = GPIO 12
+                        relay_gpio_map = {
+                            "relay1": 13,  # D7
+                            "relay2": 12,  # D6
                         }
                         
-                        for device in all_devices:
-                            gpio_pin = device.get("gpio_pin")
-                            if gpio_pin is not None:
-                                for label, pin in settings.ESP32_PIN_MAP.items():
-                                    if pin == gpio_pin and label in relay_map:
-                                        physical_state = relay_map[label]
-                                        if physical_state is not None:
-                                            # Đảo ngược nếu is_inverted
-                                            logical_status = not physical_state if device.get("is_inverted") else physical_state
-                                            if device.get("status") != logical_status:
-                                                # Cập nhật DB
-                                                await collection.update_one(
-                                                    {"device_id": device["device_id"]}, 
-                                                    {"$set": {"status": logical_status, "updated_at": datetime.utcnow()}}
-                                                )
-                                                # Broadcast realtime cho App Flutter
-                                                await ws_manager.broadcast({
-                                                    "event": "device_update",
-                                                    "data": {"device_id": device["device_id"], "status": logical_status}
-                                                })
+                        for relay_key, gpio_pin in relay_gpio_map.items():
+                            physical_state = device_data.get(relay_key)
+                            if physical_state is None:
+                                continue
+                            
+                            # Tìm thiết bị nào đang dùng GPIO pin này
+                            for device in all_devices:
+                                if device.get("gpio_pin") == gpio_pin:
+                                    # Đảo ngược nếu is_inverted
+                                    logical_status = not physical_state if device.get("is_inverted") else physical_state
+                                    
+                                    # Cập nhật DB
+                                    await collection.update_one(
+                                        {"device_id": device["device_id"]}, 
+                                        {"$set": {"status": logical_status, "updated_at": datetime.utcnow()}}
+                                    )
+                                    # Log
+                                    await db.db["device_logs"].insert_one({
+                                        "device_id": device["device_id"],
+                                        "status": logical_status,
+                                        "source": "physical_button",
+                                        "timestamp": datetime.utcnow()
+                                    })
+                                    # Broadcast realtime cho App Flutter
+                                    await ws_manager.broadcast({
+                                        "event": "device_update",
+                                        "data": {"device_id": device["device_id"], "status": logical_status}
+                                    })
+                                    print(f"🔘 Nút bấm vật lý: {device['device_id']} → {logical_status}")
+                                    break
 
-                    await ws_manager.broadcast({
-                        "type": "esp32_status",
-                        "relay1": device_data.get("relay1", False),
-                        "relay2": device_data.get("relay2", False),
-                        "relay3": device_data.get("relay3", False),
-                        "relay4": device_data.get("relay4", False),
-                        "online": device_data.get("online", False)
-                    })
                 if self.loop is not None and self.loop.is_running():
                     asyncio.run_coroutine_threadsafe(broadcast_device_status(), self.loop)
             except Exception as e:

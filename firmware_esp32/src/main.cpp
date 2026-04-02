@@ -1,12 +1,12 @@
 #include <Arduino.h>
+#include <ArduinoJson.h> // Library for JSON parsing
+#include <ArduinoOTA.h>
 #include <DHT.h>
 #include <DNSServer.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 #include <WiFiManager.h>
-#include <ArduinoOTA.h>
-#include <ArduinoJson.h> // Library for JSON parsing
 
 // --- MQTT ---
 const char *mqtt_server = "broker.hivemq.com";
@@ -21,11 +21,11 @@ const char *topic_gpio_control = "smarthome/esp/gpio/control";
 DHT dht(DHTPIN, DHTTYPE);
 
 // --- CẢM BIẾN CHUYỂN ĐỘNG PIR & NÚT BẤM (NEW 2.0) ---
-#define PIR_PIN D2        // Chân đọc cảm biến PIR
-#define BTN1_PIN D5       // Nút bấm vật lý 1
-#define BTN2_PIN D6       // Nút bấm vật lý 2
-#define RELAY1_PIN D1     // Relay 1 (Đã dùng cho DHT? Có thể trùng, nhưng giả định D3 cho Relay 1)
-#define RELAY2_PIN D4     // Relay 2
+#define PIR_PIN D2    // Chân đọc cảm biến PIR
+#define BTN1_PIN D3   // Nút bấm vật lý 1 (An toàn vì nút nhả hở mạch lúc boot)
+#define BTN2_PIN D4   // Nút bấm vật lý 2
+#define RELAY1_PIN D7 // Relay 1 (Dời sang D7)
+#define RELAY2_PIN D6 // Relay 2
 
 bool lastPirState = false;
 bool relay1State = false;
@@ -64,14 +64,14 @@ void callback(char *topic, byte *payload, unsigned int length) {
 
   if (String(topic) == topic_gpio_control) {
     int pin = doc["pin"];
-    const char* action = doc["action"]; // "on" or "off"
+    const char *action = doc["action"]; // "on" or "off"
 
     // Hỗ trợ tất cả chân Pin >= 0
     if (pin >= 0) {
-      pinMode(pin, OUTPUT); 
+      pinMode(pin, OUTPUT);
       bool state = (String(action) == "on");
       digitalWrite(pin, state ? HIGH : LOW);
-      
+
       Serial.print("⚡ Action: ");
       Serial.print(action);
       Serial.print(" | GPIO: ");
@@ -112,12 +112,12 @@ void setup() {
   randomSeed(micros());
 
   dht.begin();
-  
+
   pinMode(PIR_PIN, INPUT);
   pinMode(BTN1_PIN, INPUT_PULLUP);
   pinMode(BTN2_PIN, INPUT_PULLUP);
-  pinMode(D3, OUTPUT); // D3 (Relay 1)
-  pinMode(D4, OUTPUT); // D4 (Relay 2)
+  pinMode(RELAY1_PIN, OUTPUT); // Relay 1
+  pinMode(RELAY2_PIN, OUTPUT); // Relay 2
 
   setup_wifi();
 
@@ -127,7 +127,7 @@ void setup() {
   // OTA Support
   ArduinoOTA.setHostname("SmartHome-ESP-Dynamic");
   ArduinoOTA.begin();
-  
+
   Serial.println("🚀 SmartHome Firmware 2.0 (Dynamic GPIO) Ready!");
 }
 
@@ -162,21 +162,23 @@ void loop() {
 
   if (btn1 == LOW && lastBtn1 == HIGH) { // Nhấn nút 1
     relay1State = !relay1State;
-    digitalWrite(D3, relay1State ? HIGH : LOW);
-    String payload = "{\"relay1\": " + String(relay1State ? "true" : "false") + "}";
+    digitalWrite(RELAY1_PIN, relay1State ? HIGH : LOW);
+    String payload =
+        "{\"relay1\": " + String(relay1State ? "true" : "false") + "}";
     client.publish("smarthome/devices/esp8266_node1/status", payload.c_str());
     Serial.println("🔘 Nút 1 nhấn -> Đảo trạng thái Relay 1");
     delay(200); // Chống dội
   }
   if (btn2 == LOW && lastBtn2 == HIGH) { // Nhấn nút 2
     relay2State = !relay2State;
-    digitalWrite(D4, relay2State ? HIGH : LOW);
-    String payload = "{\"relay2\": " + String(relay2State ? "true" : "false") + "}";
+    digitalWrite(RELAY2_PIN, relay2State ? HIGH : LOW);
+    String payload =
+        "{\"relay2\": " + String(relay2State ? "true" : "false") + "}";
     client.publish("smarthome/devices/esp8266_node1/status", payload.c_str());
     Serial.println("🔘 Nút 2 nhấn -> Đảo trạng thái Relay 2");
     delay(200); // Chống dội
   }
-  
+
   lastBtn1 = btn1;
   lastBtn2 = btn2;
 
@@ -190,8 +192,9 @@ void loop() {
 
     if (!isnan(h) && !isnan(t)) {
       String payload = "{\"temperature\": " + String(t, 1) +
-                       ", \"humidity\": " + String(h, 1) + 
-                       ", \"motion\": " + String(pirState ? "true" : "false") + "}";
+                       ", \"humidity\": " + String(h, 1) +
+                       ", \"motion\": " + String(pirState ? "true" : "false") +
+                       "}";
       client.publish("smarthome/sensors/dht11/data", payload.c_str());
       Serial.println("📤 Published Sensor Data: " + payload);
     }

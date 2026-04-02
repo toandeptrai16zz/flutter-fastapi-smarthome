@@ -129,7 +129,11 @@ class _AutomationTabState extends State<AutomationTab> {
     }
   }
 
-  void _showScheduleDialog({int? index}) {
+  void _showScheduleDialog({int? index}) async {
+    // Luôn tải lại danh sách thiết bị mới nhất từ DB trước khi mở dialog
+    allDevices = await ApiService.getAllDevices();
+    if (!mounted) return;
+
     bool isEditMode = index != null;
     Map<String, dynamic>? existingItem = isEditMode ? schedules[index] : null;
 

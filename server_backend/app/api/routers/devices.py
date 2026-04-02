@@ -18,7 +18,7 @@ async def get_all_devices():
     devices = await collection.find({}, {"_id": 0}).to_list(100)
     for d in devices:
         d["has_firmware"] = d["device_id"] in FIRMWARE_DEVICE_IDS or d.get("gpio_pin") is not None
-        if d.get("gpio_pin"):
+        if d.get("gpio_pin") is not None:
             for label, pin in settings.ESP32_PIN_MAP.items():
                 if pin == d["gpio_pin"]:
                     d["pin_label"] = label
@@ -31,12 +31,17 @@ async def get_available_pins():
     used_pins = await collection.distinct("gpio_pin")
     used_pins = [p for p in used_pins if p is not None]
     
+    # Các chân cứng (Hardware Pins) đã gắn cảm biến/nút
+    hardcoded_pins = [5, 4, 0, 2] # D1, D2, D3(Nút 1), D4(Nút 2)
+
     available = []
     for label, pin in settings.ESP32_PIN_MAP.items():
+        is_used_by_db = pin in used_pins
+        is_hardcoded = pin in hardcoded_pins
         available.append({
             "label": label,
             "pin": pin,
-            "is_used": pin in used_pins
+            "is_used": is_used_by_db or is_hardcoded
         })
     return available
 
