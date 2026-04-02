@@ -38,6 +38,7 @@ class MQTTService:
             # Subscribe 2 loại topic: lệnh cho thiết bị (status) và dữ liệu cảm biến (data)
             client.subscribe("smarthome/devices/+/status")
             client.subscribe("smarthome/sensors/+/data")
+            client.subscribe("smarthome/camera/ip") # Hứng IP động của ESP32-CAM
         else:
             print(f"MQTT connect failed, rc={rc}")
             self.connected = False
@@ -53,15 +54,56 @@ class MQTTService:
             import time
             from datetime import datetime
             from app.core.database import db
-            from app.main import ws_manager
             try:
                 data = json.loads(payload)
+                from app.services.websocket_manager import ws_manager # Import tại đây để tránh vòng lặp
                 sensor_id = topic.split("/")[2]
                 temp = data.get("temperature", 0.0)
                 hum = data.get("humidity", 0.0)
+                motion = data.get("motion", False)
 
-                # KIỂM TRA NHIỆT ĐỘ CÓ QUÁ NÓNG (>=31 ĐỘ C) ĐỂ GỌI AI
                 current_time = time.time()
+                
+                # --- AI INTERVENTION: SECURITY ALERT (CHỐNG TRỘM) ---
+                if motion and (current_time - self.last_ai_alert_time > 15):
+                    self.last_ai_alert_time = current_time
+                    async def process_security_ai():
+                        from groq import AsyncGroq
+                        from app.core.config import settings
+                        from app.services.websocket_manager import ws_manager
+                        try:
+                            if not settings.GROQ_API_KEY:
+                                raise ValueError("Chưa cài GROQ_API_KEY")
+                            groq_client = AsyncGroq(api_key=settings.GROQ_API_KEY)
+                            now_hour = datetime.now().hour
+                            prompt = f'''Bạn là AI An Ninh. Hiện tại là {now_hour} giờ. Cảm biến hồng ngoại phát hiện có chuyển động lạ trong nhà!
+Nếu là ban đêm (22h - 5h sáng), hãy bật báo động còi và báo tin khẩn cấp. Nếu là ban ngày, chỉ báo tin bình thường.
+Trả về JSON duy nhất: {{"is_threat": true/false, "action": "turn_on_lights", "message": "Thông báo Push Notification bằng giọng văn cảnh sát hoặc quản gia bảo vệ"}}'''
+                            response = await groq_client.chat.completions.create(
+                                model="llama-3.3-70b-versatile",
+                                messages=[{"role": "user", "content": prompt}],
+                                temperature=0.2
+                            )
+                            result_text = response.choices[0].message.content.replace("```json", "").replace("```", "").strip()
+                            ai_result = json.loads(result_text)
+                            
+                            print(f"🚨 AI Security Alert: {ai_result.get('message')}")
+                            if ai_result.get("is_threat"):
+                                await self.publish("smarthome/devices/den_phong_khach/control", "ON") # Bật đèn khách
+                                await self.publish("smarthome/camera/flash", "ON") # Bật Flash sáng chói lóa trên ESP32-CAM!
+                            
+                            await ws_manager.broadcast({
+                                "type": "ai_alert",
+                                "message": ai_result.get("message", "Phát hiện đột nhập!"),
+                                "alert_type": "security"
+                            })
+                        except Exception as ai_e:
+                            print(f"❌ Lỗi AI Security: {ai_e}")
+
+                    if self.loop is not None and self.loop.is_running():
+                        asyncio.run_coroutine_threadsafe(process_security_ai(), self.loop)
+
+                # --- AI INTERVENTION: COOLING (LÀM MÁT) ---
                 if temp >= 31.0 and (current_time - self.last_ai_alert_time > 10):  # 10s = Test mode (Đổi về 600s sau)
                     self.last_ai_alert_time = current_time
                     async def process_ai():
@@ -137,6 +179,43 @@ Trả về ĐÚNG 1 JSON, KHÔNG markdown: {{"fan_action": true, "message": "Câ
                 from app.services.websocket_manager import ws_manager
                 device_data = json.loads(payload)
                 async def broadcast_device_status():
+                    # 1. Map relays to device_ids (assuming mapping logic or just save raw flags to board)
+                    # Hoặc cập nhật thiết bị có gpio_pin D1, D2 tương ứng với relay1, relay2
+                    from app.core.database import db
+                    if db.db is not None:
+                        # Tra cứu thiết bị nào đang đấu vào D1, D2, D3, D4
+                        from app.core.config import settings
+                        collection = db.db["devices"]
+                        all_devices = await collection.find({}).to_list(100)
+                        
+                        relay_map = {
+                            "D1": device_data.get("relay1"),
+                            "D2": device_data.get("relay2"),
+                            "D3": device_data.get("relay3"),
+                            "D4": device_data.get("relay4"),
+                        }
+                        
+                        for device in all_devices:
+                            gpio_pin = device.get("gpio_pin")
+                            if gpio_pin is not None:
+                                for label, pin in settings.ESP32_PIN_MAP.items():
+                                    if pin == gpio_pin and label in relay_map:
+                                        physical_state = relay_map[label]
+                                        if physical_state is not None:
+                                            # Đảo ngược nếu is_inverted
+                                            logical_status = not physical_state if device.get("is_inverted") else physical_state
+                                            if device.get("status") != logical_status:
+                                                # Cập nhật DB
+                                                await collection.update_one(
+                                                    {"device_id": device["device_id"]}, 
+                                                    {"$set": {"status": logical_status, "updated_at": datetime.utcnow()}}
+                                                )
+                                                # Broadcast realtime cho App Flutter
+                                                await ws_manager.broadcast({
+                                                    "event": "device_update",
+                                                    "data": {"device_id": device["device_id"], "status": logical_status}
+                                                })
+
                     await ws_manager.broadcast({
                         "type": "esp32_status",
                         "relay1": device_data.get("relay1", False),
@@ -149,6 +228,27 @@ Trả về ĐÚNG 1 JSON, KHÔNG markdown: {{"fan_action": true, "message": "Câ
                     asyncio.run_coroutine_threadsafe(broadcast_device_status(), self.loop)
             except Exception as e:
                 print(f"❌ Lỗi broadcast device status: {e}")
+
+        # Nếu nhận IP từ ESP32-CAM
+        elif topic == "smarthome/camera/ip":
+            print(f"📸 NHẬN ĐƯỢC IP CAMERA TỪ MQTT: {payload}")
+            try:
+                import json
+                from app.core.database import db
+                cam_data = json.loads(payload)
+                ip_address = cam_data.get("ip")
+                if ip_address and db.db is not None:
+                    async def save_cam_ip():
+                        await db.db["settings"].update_one(
+                            {"type": "camera_config"},
+                            {"$set": {"ip": ip_address, "updated_at": datetime.utcnow()}},
+                            upsert=True
+                        )
+                        print(f"📸 Cập nhật IP ESP32-CAM thành công: {ip_address}")
+                    if self.loop is not None and self.loop.is_running():
+                        asyncio.run_coroutine_threadsafe(save_cam_ip(), self.loop)
+            except Exception as e:
+                print(f"❌ Lỗi lưu IP Camera: {e}")
 
     async def publish(self, topic: str, payload: str):
         if not self.client or not self.connected:

@@ -20,6 +20,19 @@ const char *topic_gpio_control = "smarthome/esp/gpio/control";
 #define DHTTYPE DHT11
 DHT dht(DHTPIN, DHTTYPE);
 
+// --- CẢM BIẾN CHUYỂN ĐỘNG PIR & NÚT BẤM (NEW 2.0) ---
+#define PIR_PIN D2        // Chân đọc cảm biến PIR
+#define BTN1_PIN D5       // Nút bấm vật lý 1
+#define BTN2_PIN D6       // Nút bấm vật lý 2
+#define RELAY1_PIN D1     // Relay 1 (Đã dùng cho DHT? Có thể trùng, nhưng giả định D3 cho Relay 1)
+#define RELAY2_PIN D4     // Relay 2
+
+bool lastPirState = false;
+bool relay1State = false;
+bool relay2State = false;
+bool lastBtn1 = HIGH;
+bool lastBtn2 = HIGH;
+
 WiFiClient espClient;
 PubSubClient client(espClient);
 
@@ -99,6 +112,13 @@ void setup() {
   randomSeed(micros());
 
   dht.begin();
+  
+  pinMode(PIR_PIN, INPUT);
+  pinMode(BTN1_PIN, INPUT_PULLUP);
+  pinMode(BTN2_PIN, INPUT_PULLUP);
+  pinMode(D3, OUTPUT); // D3 (Relay 1)
+  pinMode(D4, OUTPUT); // D4 (Relay 2)
+
   setup_wifi();
 
   client.setServer(mqtt_server, mqtt_port);
@@ -125,7 +145,42 @@ void loop() {
   }
   client.loop();
 
-  // Đọc cảm biến mỗi 10 giây
+  // --- ĐỌC CẢM BIẾN CHUYỂN ĐỘNG PIR ---
+  bool pirState = digitalRead(PIR_PIN);
+  if (pirState != lastPirState) {
+    lastPirState = pirState;
+    if (pirState == HIGH) {
+      Serial.println("🏃 Phát hiện chuyển động (PIR Triggered)!");
+      String payload = "{\"motion\": true}";
+      client.publish("smarthome/sensors/pir/data", payload.c_str());
+    }
+  }
+
+  // --- ĐỌC NÚT BẤM VẬT LÝ ---
+  bool btn1 = digitalRead(BTN1_PIN);
+  bool btn2 = digitalRead(BTN2_PIN);
+
+  if (btn1 == LOW && lastBtn1 == HIGH) { // Nhấn nút 1
+    relay1State = !relay1State;
+    digitalWrite(D3, relay1State ? HIGH : LOW);
+    String payload = "{\"relay1\": " + String(relay1State ? "true" : "false") + "}";
+    client.publish("smarthome/devices/esp8266_node1/status", payload.c_str());
+    Serial.println("🔘 Nút 1 nhấn -> Đảo trạng thái Relay 1");
+    delay(200); // Chống dội
+  }
+  if (btn2 == LOW && lastBtn2 == HIGH) { // Nhấn nút 2
+    relay2State = !relay2State;
+    digitalWrite(D4, relay2State ? HIGH : LOW);
+    String payload = "{\"relay2\": " + String(relay2State ? "true" : "false") + "}";
+    client.publish("smarthome/devices/esp8266_node1/status", payload.c_str());
+    Serial.println("🔘 Nút 2 nhấn -> Đảo trạng thái Relay 2");
+    delay(200); // Chống dội
+  }
+  
+  lastBtn1 = btn1;
+  lastBtn2 = btn2;
+
+  // Đọc cảm biến DHT mỗi 10 giây
   unsigned long now = millis();
   if (now - lastSensorTime > 10000) {
     lastSensorTime = now;
@@ -135,7 +190,8 @@ void loop() {
 
     if (!isnan(h) && !isnan(t)) {
       String payload = "{\"temperature\": " + String(t, 1) +
-                       ", \"humidity\": " + String(h, 1) + "}";
+                       ", \"humidity\": " + String(h, 1) + 
+                       ", \"motion\": " + String(pirState ? "true" : "false") + "}";
       client.publish("smarthome/sensors/dht11/data", payload.c_str());
       Serial.println("📤 Published Sensor Data: " + payload);
     }

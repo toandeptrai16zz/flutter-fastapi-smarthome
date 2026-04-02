@@ -18,6 +18,8 @@ Hệ thống đã chính thức nâng cấp lên phiên bản **AI 2.0** với c
 - **🧠 Trợ lý AI Gen Z (Llama-3.3-70b)**: Phản hồi cực nhanh, hiểu tiếng lóng, sai ngữ pháp, và cá tính linh hoạt (Gen Z Mode).
 - **⏱️ Hệ thống Hẹn giờ 2.0**: Tự động nhận diện chân Pin (GPIO) và logic Active Low cho từng thiết bị.
 - **📍 Điều khiển Room-Aware**: AI tự phân biệt "Đèn phòng ngủ" và "Đèn phòng khách" dựa trên vị trí thực tế trong DB.
+- **🛡 Anti-Hallucination AI**: Trợ lý AI có chế độ kỷ luật thép, chống bịa đặt thiết bị (không đòi bật quạt nếu nhà không có quạt).
+- **🔌 Đấu nối Cứng & Linh Hoạt**: Tương thích tốt các cảm biến thông dụng (PIR, DHT11) và Camera giám sát (ESP-CAM ESP32 stream MJPEG).
 - **📡 WebSocket Real-time 2.0**: Đồng bộ hóa nhãn Pin (D1, D2...) và trạng thái ngay lập tức khi mở App.
 
 ---
@@ -70,10 +72,20 @@ Hệ thống đã chính thức nâng cấp lên phiên bản **AI 2.0** với c
 - [x] **Scheduler Engine:** Vòng lặp kiểm tra lịch trình mỗi phút, hỗ trợ JSON control cho ESP32.
 - [x] **AI Auto Cooling:** Khi nhiệt độ ≥ 31°C, AI tự động bật quạt và thông báo.
 
-### 🔌 Firmware ESP32 (C++ / PlatformIO)
+### 🔌 Cấu Hình Đấu Nối Cứng ESP32 NodeMCU
+Dựa theo Firmware, mô phỏng thiết bị thực tế nên được nối như sau:
+- `D1` (GPIO 5): Cảm biến nhiệt độ/độ ẩm DHT11.
+- `D2` (GPIO 4): Cảm biến chống trộm/chuyển động PIR.
+- `D3` (GPIO 0): Relay 1.
+- `D4` (GPIO 2): Relay 2.
+- `D5` (GPIO 14): Nút bấm vật lý 1 (chân còn lại nối mass GND).
+- `D6` (GPIO 12): Nút bấm vật lý 2 (chân còn lại nối mass GND).
+
+### 🎛 Firmware ESP32 (C++ / PlatformIO)
 - [x] **WiFiManager:** Cấu hình WiFi qua giao diện captive portal.
 - [x] **MQTT Subscribe:** Nhận lệnh JSON `{ "pin": ..., "action": ... }` linh hoạt.
-- [x] **DHT11 Sensor:** Đọc nhiệt độ & độ ẩm mỗi 5 giây, publish lên MQTT.
+- [x] **DHT11 Sensor & PIR:** Đọc cảnh báo phát hiện chuyển động theo thời gian thực và push sensor data lên HiveMQ.
+- [x] **Camera MJPEG ESP32-CAM:** Stream video hoạt động trơn tru dựa trên thư viện flutter_mjpeg đa nền tảng kết hợp điều khiển đèn Flash.
 
 ---
 
@@ -121,9 +133,9 @@ flutter run
 ---
 
 ## 📝 Kế Hoạch Phát Triển Tiếp Theo
-- **Nút bấm vật lý trên ESP32:** Điều khiển ngược từ phần cứng lên App.
-- **Hỗ trợ camera giám sát:** Tích hợp luồng stream video vào App.
-- **Hệ thống cảnh báo an ninh:** Sử dụng cảm biến hồng ngoại và thông báo đẩy.
+- **Tích hợp cảm biến mở cửa (Door Sensor):** Báo động tự động khi cửa bị mở.
+- **Micro-animations & GenZ UI:** Nâng cấp thêm các hiệu ứng vuốt/chạm xịn xò cho App.
+- **Web Dashboard:** Triển khai thêm một giao diện Web Admin bằng React/Vue để quản lý thiết bị trên PC.
 
 ---
 

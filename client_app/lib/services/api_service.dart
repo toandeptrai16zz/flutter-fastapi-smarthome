@@ -272,4 +272,37 @@ class ApiService {
     }
     return null;
   }
+
+  // === ESP32-CAM ===
+
+  // Lấy IP Camera động từ Server
+  static Future<Map<String, dynamic>?> getCameraStatus() async {
+    try {
+      final response = await http.get(
+        Uri.parse('${Constants.baseUrl}/camera/status'),
+        headers: _defaultHeaders,
+      ).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+    } catch (e) {
+      print("❌ Lỗi lấy Camera status: $e");
+    }
+    return null;
+  }
+
+  // Bật/Tắt Flash LED trên ESP32-CAM (qua MQTT từ Server)
+  static Future<bool> controlCameraFlash(bool turnOn) async {
+    try {
+      final response = await http.post(
+        Uri.parse('${Constants.baseUrl}/camera/flash'),
+        headers: {..._defaultHeaders, "Content-Type": "application/json"},
+        body: jsonEncode({"action": turnOn ? "on" : "off"}),
+      ).timeout(const Duration(seconds: 10));
+      return response.statusCode == 200;
+    } catch (e) {
+      print("❌ Lỗi điều khiển Flash: $e");
+      return false;
+    }
+  }
 }

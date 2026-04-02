@@ -1,25 +1,25 @@
-import motor.asyncio
 import asyncio
 import os
+from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
 
 load_dotenv()
 
-async def check():
-    client = motor.asyncio.AsyncIOMotorClient(os.getenv('MONGO_URI', 'mongodb://localhost:27017'))
-    db = client['iot_database']
+async def check_db():
+    mongo_url = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
+    db_name = os.getenv("MONGODB_DB_NAME", "smarthome_db")
+    client = AsyncIOMotorClient(mongo_url)
+    db = client[db_name]
     
-    print("\n--- [DANH SÁCH THIẾT BỊ TRONG DB] ---")
-    devices = await db['devices'].find({}, {"_id": 0}).to_list(100)
-    for d in devices:
-        print(f"ID: {d.get('device_id')} | Tên: {d.get('name')} | Chân Pin: {d.get('gpio_pin')}")
-        
-    print("\n--- [DANH SÁCH LỊCH TRÌNH ĐÃ ĐẶT] ---")
-    schedules = await db['schedules'].find({}, {"_id": 0}).to_list(100)
-    for s in schedules:
-        print(f"ID Thiết bị: {s.get('device_id')} | Giờ hẹn: {s.get('time')} | Trạng thái: {'BẬT' if s.get('action') else 'TẮT'}")
+    settings = await db["settings"].find_one({"type": "camera_config"})
+    print(f"--- Camera Config ---")
+    print(settings)
     
-    print("\n-------------------------------------")
+    devices = await db["devices"].find_one({"device_id": "den_phong_khach"})
+    print(f"--- Example Device (den_phong_khach) ---")
+    print(devices)
+    
+    client.close()
 
 if __name__ == "__main__":
-    asyncio.run(check())
+    asyncio.run(check_db())

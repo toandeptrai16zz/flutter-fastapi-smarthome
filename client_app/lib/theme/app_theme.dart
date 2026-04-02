@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 
 // 1. BẢNG MÀU TĨNH
 class AppColors {
-  static const Color primary = Color(0xFF137FEC); 
+  static const Color primary = Color(0xFF00E5FF); // Neon Cyan
 
-  // Dark Mode
-  static const Color backgroundDark = Color(0xFF101922); 
-  static const Color surfaceDark = Color(0xFF1B2531);    
+  // Dark Mode (Nexus Cyber theme)
+  static const Color backgroundDark = Color(0xFF070B19); // Màn đêm sâu thẳm
+  static const Color surfaceDark = Color(0xFF11172A);    // Khối nổi mờ
   static const Color textMainDark = Colors.white;
   static const Color textSubDark = Color(0xFF94A3B8);
-  static const Color borderDark = Color(0xFF334155);
-  static const Color iconDark = Colors.white;
+  static const Color borderDark = Color(0xFF2E008B);     // Đường viền Neon Tím đen
+  static const Color iconDark = Color(0xFF00E5FF);
 
   // Light Mode
   static const Color backgroundLight = Color(0xFFF6F7F8); 

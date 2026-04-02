@@ -9,6 +9,8 @@ import '../automation/schedule_screen.dart';
 import '../device/share_device_screen.dart'; 
 import '../../services/api_service.dart'; // Import API Service
 import '../../services/websocket_service.dart'; // Import WebSocket Realtime
+import 'package:awesome_notifications/awesome_notifications.dart';
+import 'package:flutter_mjpeg/flutter_mjpeg.dart'; // Import thư viện Mjpeg
 
 // Dữ liệu từ điển đa ngôn ngữ
 final Map<String, Map<String, String>> _appData = {
@@ -316,8 +318,17 @@ class _HomeTabState extends State<_HomeTab> {
   @override
   void initState() {
     super.initState();
+    _requestNotificationPermission();
     _loadAllDevices();
     _connectWebSocket();
+  }
+
+  void _requestNotificationPermission() {
+    AwesomeNotifications().isNotificationAllowed().then((isAllowed) {
+      if (!isAllowed) {
+        AwesomeNotifications().requestPermissionToSendNotifications();
+      }
+    });
   }
 
   void _connectWebSocket() {
@@ -342,9 +353,26 @@ class _HomeTabState extends State<_HomeTab> {
         final message = data['message'] as String? ?? "AI Alert";
         final deviceId = data['device_id'] as String?;
         final status = data['status'] as bool? ?? true;
-        final idx = devices.indexWhere((d) => d['device_id'] == deviceId);
-        if (idx != -1) setState(() => devices[idx]['status'] = status);
-        _showAITalkDialog(message);
+        final alertType = data['alert_type'] as String? ?? "info";
+
+        if (deviceId != null && deviceId != "none") {
+            final idx = devices.indexWhere((d) => d['device_id'] == deviceId);
+            if (idx != -1) setState(() => devices[idx]['status'] = status);
+        }
+
+        if (alertType == "security") {
+            AwesomeNotifications().createNotification(
+              content: NotificationContent(
+                id: 100,
+                channelKey: 'alerts_channel',
+                actionType: ActionType.Default,
+                title: '🚨 KHẨN CẤP: AI An Ninh',
+                body: message,
+              )
+            );
+        } else {
+            _showAITalkDialog(message);
+        }
       } else if (event == 'device_added') {
         final deviceId = data['device_id'] as String?;
         if (deviceId != null && !devices.any((d) => d['device_id'] == deviceId)) {
@@ -458,6 +486,157 @@ class _HomeTabState extends State<_HomeTab> {
       case 'tv': return Colors.red;
       default: return Colors.grey;
     }
+  }
+
+  void _showCameraStream() async {
+    // Hiển thị dialog loading trước
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        backgroundColor: widget.theme.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(color: Colors.cyanAccent),
+              const SizedBox(height: 16),
+              Text("Đang tìm Camera...", style: TextStyle(color: widget.theme.textMain)),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    // Gọi API lấy IP Camera động
+    final camData = await ApiService.getCameraStatus();
+    if (!mounted) return;
+    Navigator.pop(context); // Đóng loading
+
+    if (camData == null || camData['success'] != true) {
+      // Không tìm thấy Camera
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: widget.theme.surface,
+          title: Row(children: [
+            const Icon(Icons.videocam_off, color: Colors.redAccent),
+            const SizedBox(width: 8),
+            Text("Camera Offline", style: TextStyle(color: widget.theme.textMain)),
+          ]),
+          content: Text(
+            "Chưa tìm thấy ESP32-CAM nào!\n\n"
+            "Hãy chắc chắn:\n"
+            "• ESP32-CAM đã được nạp firmware NexHome\n"
+            "• Đã kết nối cùng mạng WiFi\n"
+            "• MQTT broker đang hoạt động",
+            style: TextStyle(color: widget.theme.textSub),
+          ),
+          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Đã hiểu"))],
+        ),
+      );
+      return;
+    }
+
+    final String streamUrl = camData['url'];
+    final String camIp = camData['ip'];
+    bool flashOn = false;
+
+    // Hiển thị Camera Stream
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => Dialog(
+          backgroundColor: widget.theme.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(children: [
+                      const Icon(Icons.videocam, color: Colors.cyanAccent),
+                      const SizedBox(width: 8),
+                      Text("Camera An Ninh", style: TextStyle(color: widget.theme.textMain, fontSize: 18, fontWeight: FontWeight.bold)),
+                    ]),
+                    IconButton(
+                      icon: Icon(Icons.close, color: widget.theme.textSub),
+                      onPressed: () => Navigator.pop(context),
+                    )
+                  ],
+                ),
+                const SizedBox(height: 8),
+                // IP Badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.greenAccent, shape: BoxShape.circle)),
+                    const SizedBox(width: 6),
+                    Text("LIVE • $camIp", style: const TextStyle(color: Colors.greenAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                  ]),
+                ),
+                const SizedBox(height: 12),
+                // Video Stream
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    width: double.infinity,
+                    height: 220,
+                    decoration: BoxDecoration(
+                      color: Colors.black,
+                      border: Border.all(color: Colors.cyanAccent.withOpacity(0.5)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Mjpeg(
+                      isLive: true,
+                      stream: streamUrl,
+                      fit: BoxFit.cover,
+                      error: (context, error, stack) => const Center(
+                        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                          Icon(Icons.signal_wifi_off, color: Colors.redAccent, size: 48),
+                          SizedBox(height: 8),
+                          Text("Mất kết nối Camera", style: TextStyle(color: Colors.redAccent)),
+                        ]),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // Flash Control Button
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        setDialogState(() => flashOn = !flashOn);
+                        await ApiService.controlCameraFlash(flashOn);
+                      },
+                      icon: Icon(flashOn ? Icons.flash_on : Icons.flash_off, color: flashOn ? Colors.yellow : Colors.white70),
+                      label: Text(flashOn ? "Flash: BẬT" : "Flash: TẮT", style: TextStyle(color: flashOn ? Colors.yellow : Colors.white70)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: flashOn ? Colors.amber.withOpacity(0.3) : Colors.grey.withOpacity(0.3),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   void _showAddDeviceDialog() {
@@ -716,7 +895,19 @@ class _HomeTabState extends State<_HomeTab> {
                   const SizedBox(width: 12),
                   Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(widget.tr('welcome'), style: TextStyle(color: widget.theme.textSub, fontSize: 12)), Text(widget.userName, style: TextStyle(color: widget.theme.textMain, fontSize: 20, fontWeight: FontWeight.bold))]),
               ]),
-              GestureDetector(onTap: _showAddDeviceDialog, child: CircleAvatar(backgroundColor: widget.theme.surface, child: Icon(Icons.add, color: widget.theme.primary))),
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: _showCameraStream, 
+                    child: CircleAvatar(backgroundColor: widget.theme.surface, child: const Icon(Icons.videocam, color: Colors.cyanAccent))
+                  ),
+                  const SizedBox(width: 12),
+                  GestureDetector(
+                    onTap: _showAddDeviceDialog, 
+                    child: CircleAvatar(backgroundColor: widget.theme.surface, child: Icon(Icons.add, color: widget.theme.primary))
+                  ),
+                ],
+              ),
           ]),
           const SizedBox(height: 24),
           Row(children: [Expanded(child: _buildEnvCard(widget.tr('temp'), currentTemp, "°C", Icons.thermostat, Colors.orange)), const SizedBox(width: 16), Expanded(child: _buildEnvCard(widget.tr('hum'), currentHum, "%", Icons.water_drop, Colors.blue))]),

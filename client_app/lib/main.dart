@@ -1,11 +1,28 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
-import 'screens/auth/login_screen.dart';
+import 'screens/splash_screen.dart'; // Thêm Splash Screen
 import 'utils/constants.dart';
+import 'package:awesome_notifications/awesome_notifications.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  AwesomeNotifications().initialize(
+    null,
+    [
+      NotificationChannel(
+        channelGroupKey: 'smarthome_alerts',
+        channelKey: 'alerts_channel',
+        channelName: 'SmartHome Alerts',
+        channelDescription: 'Thông báo An ninh & AI',
+        defaultColor: const Color(0xFF00E5FF),
+        ledColor: Colors.white,
+        importance: NotificationImportance.Max,
+      )
+    ],
+    debug: true
+  );
   
   // Bỏ qua kiểm tra chứng chỉ SSL (cực kỳ quan trọng khi dùng Ngrok/Localtunnel)
   HttpOverrides.global = MyHttpOverrides();
@@ -32,7 +49,7 @@ class MyApp extends StatelessWidget {
       title: 'IoT Smart Home',
       // ✅ Sửa tên darkTheme thành appDarkTheme cho khớp file app_theme.dart
       theme: appDarkTheme, 
-      home: const LoginScreen(),
+      home: const SplashScreen(), // Khởi chạy từ đây
     );
   }
 }
