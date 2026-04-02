@@ -10,19 +10,19 @@
 
 ---
 
-## 🚀 Báo Cáo Tiến Độ & Cập Nhật Mới (AI 2.0)
+##  Báo Cáo Tiến Độ & Cập Nhật Mới (AI 2.0)
 
 **Cập nhật lần cuối: 03/04/2026**
 
 Hệ thống đã chính thức nâng cấp lên phiên bản **AI 2.0** với các tính năng đột phá:
-- **🧠 Trợ lý AI Gen Z (Llama-3.3-70b)**: Phản hồi cực nhanh, hiểu tiếng lóng, sai ngữ pháp, và cá tính linh hoạt (Gen Z Mode).
-- **⏱️ Hệ thống Hẹn giờ 2.0**: Tự động nhận diện chân Pin (GPIO) và logic Active Low cho từng thiết bị. Danh sách thiết bị trong Lịch trình luôn đồng bộ realtime với trang chủ.
-- **📍 Điều khiển Room-Aware**: AI tự phân biệt "Đèn phòng ngủ" và "Đèn phòng khách" dựa trên vị trí thực tế trong DB.
-- **🛡 Anti-Hallucination AI**: Trợ lý AI có chế độ kỷ luật thép, chống bịa đặt thiết bị (không đòi bật quạt nếu nhà không có quạt).
-- **🔌 Đấu nối Cứng & Linh Hoạt**: Tương thích tốt các cảm biến thông dụng (PIR, DHT11) và Camera giám sát (ESP-CAM ESP32 stream MJPEG).
-- **📡 WebSocket Real-time 2.0**: Đồng bộ hóa nhãn Pin (D1, D2...) và trạng thái ngay lập tức khi mở App.
-- **🔘 Nút bấm vật lý 2 chiều**: Nhấn nút cứng trên mạch → App cập nhật trạng thái realtime qua MQTT → WebSocket.
-- **🚨 AI An Ninh thông minh**: Cảm biến PIR chỉ cảnh báo khi thực sự phát hiện chuyển động (cooldown 120s), không spam thông báo.
+- ** Trợ lý AI Gen Z (Llama-3.3-70b)**: Phản hồi cực nhanh, hiểu tiếng lóng, sai ngữ pháp, và cá tính linh hoạt (Gen Z Mode).
+- ** Hệ thống Hẹn giờ 2.0**: Tự động nhận diện chân Pin (GPIO) và logic Active Low cho từng thiết bị. Danh sách thiết bị trong Lịch trình luôn đồng bộ realtime với trang chủ.
+- ** Điều khiển Room-Aware**: AI tự phân biệt "Đèn phòng ngủ" và "Đèn phòng khách" dựa trên vị trí thực tế trong DB.
+- ** Anti-Hallucination AI**: Trợ lý AI có chế độ kỷ luật thép, chống bịa đặt thiết bị (không đòi bật quạt nếu nhà không có quạt).
+- ** Đấu nối Cứng & Linh Hoạt**: Tương thích tốt các cảm biến thông dụng (PIR, DHT11) và Camera giám sát (ESP-CAM ESP32 stream MJPEG).
+- ** WebSocket Real-time 2.0**: Đồng bộ hóa nhãn Pin (D1, D2...) và trạng thái ngay lập tức khi mở App.
+- ** Nút bấm vật lý 2 chiều**: Nhấn nút cứng trên mạch → App cập nhật trạng thái realtime qua MQTT → WebSocket.
+- ** AI An Ninh thông minh**: Cảm biến PIR chỉ cảnh báo khi thực sự phát hiện chuyển động (cooldown 120s), không spam thông báo.
 
 ---
 
@@ -44,7 +44,7 @@ Hệ thống đã chính thức nâng cấp lên phiên bản **AI 2.0** với c
 
 ## ✅ Các Tính Năng Đã Hoàn Thiện
 
-### 🤖 Trợ Lý AI Giọng Nói (Gen Z Edition)
+###  Trợ Lý AI Giọng Nói (Gen Z Edition)
 - [x] **Nhận diện giọng nói tiếng Việt:** Tích hợp `speech_to_text` với quét locale tự động.
 - [x] **Bộ não AI siêu tốc:** Sử dụng **Groq Cloud** (chip LPU) với model **Llama-3.3-70B-Versatile**.
 - [x] **Thông minh đột xuất:** Hiểu tiếng Anh bồi, tiếng lóng, sai ngữ pháp (vd: 'light bed on' -> Bật đèn ngủ).
@@ -64,26 +64,26 @@ Hệ thống đã chính thức nâng cấp lên phiên bản **AI 2.0** với c
 - [x] **Nhãn Pin thông minh:** Hiển thị nhãn D1, D2... ngay trên card thiết bị để dễ đối chiếu phần cứng.
 - [x] **Nút bấm vật lý đồng bộ 2 chiều:** Nhấn nút trên mạch ESP → App cập nhật trạng thái realtime qua MQTT + WebSocket.
 
-### ⏰ Tự Động Hóa & Lịch Trình (Smart Scheduling)
+###  Tự Động Hóa & Lịch Trình (Smart Scheduling)
 - [x] **Hẹn giờ thông minh:** Tự động áp dụng chân Pin và logic Active Low (gạt lên tắt/xuống bật) cho từng lịch trình.
 - [x] **Đồng bộ UI realtime:** Khi lịch trình kích hoạt, App tự động cập nhật trạng thái qua WebSocket.
 - [x] **Hiển thị chân Pin:** Màn hình lịch trình hiện rõ thiết bị nào đang được hẹn giờ ở chân Pin nào.
 - [x] **Đồng bộ thiết bị mới nhất:** Danh sách thiết bị trong form tạo lịch trình luôn lấy từ DB mới nhất, đồng bộ khớp với trang chủ.
 
-### 🚨 AI An Ninh & Cảm Biến Chuyển Động (PIR)
+###  AI An Ninh & Cảm Biến Chuyển Động (PIR)
 - [x] **Phát hiện chuyển động:** Cảm biến PIR gửi cảnh báo realtime qua MQTT topic riêng (`smarthome/sensors/pir/data`).
 - [x] **AI An Ninh tự động:** Khi phát hiện chuyển động, AI đánh giá mức độ nguy hiểm theo giờ (ban đêm = báo động, ban ngày = thông báo nhẹ).
 - [x] **Chống spam thông báo:** Cooldown 120 giây, không spam liên tục khi PIR liên tục trigger.
 - [x] **Push Notification:** Đẩy thông báo khẩn cấp lên điện thoại qua Awesome Notifications.
 
-### 🌐 Backend Server (FastAPI + Python)
+###  Backend Server (FastAPI + Python)
 - [x] **RESTful API:** Endpoints đầy đủ cho devices, sensors, schedules, AI chat.
 - [x] **WebSocket Server:** Kết nối realtime 2 chiều (ping/pong keep-alive).
 - [x] **Scheduler Engine:** Vòng lặp kiểm tra lịch trình mỗi phút, hỗ trợ JSON control cho ESP32.
 - [x] **AI Auto Cooling:** Khi nhiệt độ ≥ 31°C, AI tự động bật quạt và thông báo (cooldown 10 phút).
 - [x] **Đồng bộ nút bấm vật lý:** Backend map `relay1 → GPIO 13 (D7)`, `relay2 → GPIO 12 (D6)` để tìm thiết bị trong DB và broadcast `device_update` qua WebSocket.
 
-### 🔌 Cấu Hình Đấu Nối Cứng ESP32 NodeMCU
+###  Cấu Hình Đấu Nối Cứng ESP32 NodeMCU
 
 > ⚠️ **Lưu ý quan trọng:** Chân D3 (GPIO 0) và D4 (GPIO 2) là chân Bootstrap. **KHÔNG được nối Relay/LED vào D3/D4** vì sẽ gây treo hệ thống khi khởi động. Chỉ nên dùng D3/D4 cho nút bấm (INPUT_PULLUP) vì nút nhả hở mạch lúc boot.
 
@@ -138,7 +138,7 @@ IoT_SmartHome_Project/
 
 ---
 
-## 🚀 Hướng Dẫn Chạy Dự Án
+##  Hướng Dẫn Chạy Dự Án
 
 ### 1. Backend Server
 ```bash
@@ -166,7 +166,7 @@ pio run --target upload
 
 ---
 
-## 🐛 Các Bug Đã Sửa (Changelog)
+##  Các Bug Đã Sửa (Changelog)
 
 ### 03/04/2026
 - **Fix PIR spam thông báo:** Tách topic PIR (`smarthome/sensors/pir/data`) khỏi topic DHT. Chỉ kích AI Security khi nhận event PIR riêng, cooldown 120s thay vì 15s.
