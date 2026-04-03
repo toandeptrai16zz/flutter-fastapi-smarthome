@@ -10,9 +10,9 @@ class Settings(BaseSettings):
     MQTT_PASSWORD: str = ""
     GEMINI_API_KEY: str = ""
     GROQ_API_KEY: str = ""
+    JWT_SECRET_KEY: str = ""  # ✅ Thêm biến riêng cho JWT
 
     # ESP32/NodeMCU Pin Pool (Mapping Label -> GPIO Number)
-    # D1=5, D2=4, D5=14, D6=12, D7=13, D8=15
     ESP32_PIN_MAP: dict = {
         "D1 (GPIO 5) - Cảm biến DHT11": 5,
         "D2 (GPIO 4) - Cảm biến PIR": 4,

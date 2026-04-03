@@ -3,7 +3,8 @@ import jwt
 import bcrypt
 from app.core.config import settings
 
-SECRET_KEY = settings.GROQ_API_KEY if settings.GROQ_API_KEY else "A_VERY_SECRET_KEY_FOR_JWT_THAT_SHOULD_BE_CHANGED"
+# JWT_SECRET_KEY nên là một chuỗi ngẫu nhiên dài, độc lập với AI API key
+SECRET_KEY = settings.JWT_SECRET_KEY if settings.JWT_SECRET_KEY else "smarthome_jwt_fallback_key_change_in_production"
 ALGORITHM = "HS256"
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -22,9 +23,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
-        # Default 7 days
         expire = datetime.utcnow() + timedelta(days=7)
-    
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt

@@ -1,32 +1,40 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'theme/app_theme.dart';
-import 'screens/splash_screen.dart'; // Thêm Splash Screen
-import 'utils/constants.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
+import 'theme/app_theme.dart';
+import 'screens/auth/login_screen.dart';
+import 'utils/constants.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  AwesomeNotifications().initialize(
-    null,
+
+  // Bỏ qua kiểm tra chứng chỉ SSL (quan trọng khi dùng Ngrok/Localtunnel)
+  HttpOverrides.global = MyHttpOverrides();
+
+  // ✅ BẮT BUỘC: Khởi tạo AwesomeNotifications trước khi dùng
+  await AwesomeNotifications().initialize(
+    null, // null = dùng icon mặc định của app
     [
       NotificationChannel(
-        channelGroupKey: 'smarthome_alerts',
         channelKey: 'alerts_channel',
-        channelName: 'SmartHome Alerts',
-        channelDescription: 'Thông báo An ninh & AI',
-        defaultColor: const Color(0xFF00E5FF),
-        ledColor: Colors.white,
-        importance: NotificationImportance.Max,
-      )
+        channelName: 'AI Security Alerts',
+        channelDescription: 'Thông báo cảnh báo an ninh từ AI',
+        defaultColor: AppColors.primary,
+        ledColor: AppColors.primary,
+        importance: NotificationImportance.High,
+        channelShowBadge: true,
+      ),
+      NotificationChannel(
+        channelKey: 'basic_channel',
+        channelName: 'Basic Notifications',
+        channelDescription: 'Thông báo cơ bản từ SmartHome',
+        defaultColor: AppColors.primary,
+        importance: NotificationImportance.Default,
+      ),
     ],
-    debug: true
+    debug: false,
   );
-  
-  // Bỏ qua kiểm tra chứng chỉ SSL (cực kỳ quan trọng khi dùng Ngrok/Localtunnel)
-  HttpOverrides.global = MyHttpOverrides();
-  
+
   await Constants.init();
   runApp(const MyApp());
 }
@@ -47,9 +55,8 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'IoT Smart Home',
-      // ✅ Sửa tên darkTheme thành appDarkTheme cho khớp file app_theme.dart
-      theme: appDarkTheme, 
-      home: const SplashScreen(), // Khởi chạy từ đây
+      theme: appDarkTheme,
+      home: const LoginScreen(),
     );
   }
 }
