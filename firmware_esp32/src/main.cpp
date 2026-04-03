@@ -72,6 +72,15 @@ void callback(char *topic, byte *payload, unsigned int length) {
       bool state = (String(action) == "on");
       digitalWrite(pin, state ? HIGH : LOW);
 
+      // --- ĐỒNG BỘ TRẠNG THÁI NỘI BỘ (Để nút bấm vật lý không bị lệch pha) ---
+      if (pin == RELAY1_PIN) relay1State = state;
+      if (pin == RELAY2_PIN) relay2State = state;
+
+      // --- PHẢN HỒI LẠI MQTT (Acknowledgment) ---
+      String statusPayload = "{\"relay1\": " + String(relay1State ? "true" : "false") + 
+                             ", \"relay2\": " + String(relay2State ? "true" : "false") + "}";
+      client.publish("smarthome/devices/esp8266_node1/status", statusPayload.c_str());
+
       Serial.print("⚡ Action: ");
       Serial.print(action);
       Serial.print(" | GPIO: ");
