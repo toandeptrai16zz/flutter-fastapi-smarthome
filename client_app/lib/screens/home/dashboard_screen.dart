@@ -104,31 +104,76 @@ class _DashboardScreenState extends State<DashboardScreen> {
         onError: (val) => setState(() => _isListening = false),
       );
       if (available) {
+        // Kiểm tra xem thiết bị có hỗ trợ tiếng Việt không
+        bool hasVietnamese = false;
+        try {
+          var locales = await _speech.locales();
+          hasVietnamese = locales.any(
+            (l) => l.localeId.toLowerCase().contains('vi'),
+          );
+        } catch (_) {}
+
+        if (!hasVietnamese) {
+          // Hiển thị hướng dẫn cài gói tiếng Việt
+          if (mounted) {
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                backgroundColor: Colors.grey[900],
+                title: const Row(children: [
+                  Icon(Icons.mic_off, color: Colors.orange),
+                  SizedBox(width: 8),
+                  Text("Chưa có giọng tiếng Việt",
+                      style: TextStyle(color: Colors.white, fontSize: 16)),
+                ]),
+                content: const Text(
+                  "Thiết bị chưa cài gói nhận dạng giọng nói tiếng Việt.\n\n"
+                  "Cách khắc phục:\n"
+                  "1. Vào Cài đặt → Quản lý chung → Ngôn ngữ\n"
+                  "2. Thêm Tiếng Việt vào danh sách\n"
+                  "3. Vào Google → Nhận dạng giọng nói → Tải về Tiếng Việt\n\n"
+                  "Trong lúc chờ, bạn có thể dùng nút MIC để GÕ LỆNH thay thế.",
+                  style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.6),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text("Đã hiểu", style: TextStyle(color: Colors.cyanAccent)),
+                  ),
+                ],
+              ),
+            );
+          }
+          return;
+        }
+
         setState(() {
           _isListening = true;
           _spokenText = "";
           _aiReply = "";
         });
-        
-        // Quét tự động danh sách ngôn ngữ trong máy của ông
-        String finalLocale = "vi_VN";
-        try {
-            var locales = await _speech.locales();
-            for (var locale in locales) {
-                if (locale.localeId.toLowerCase().startsWith('vi')) {
-                    finalLocale = locale.localeId;
-                    break;
-                }
-            }
-        } catch (e) {
-             print("Lỗi quét locale: $e");
+        var locales = await _speech.locales();
+        debugPrint("STT Locales không định dạng @@");
+        for(var l in locales){
+          debugPrint("${l.localeId} - ${l.name}");
+
         }
+
+        String targetLocale = "vi-VN";
+        final viLocale = locales.firstWhere(
+          (l) => l.localeId.toLowerCase().contains('vi'),
+          orElse: () => locales.first, // fallback
+        );
+        targetLocale = viLocale.localeId; // dùng đúng ID thiết bị báo
+        debugPrint("=== Using locale: $targetLocale ===");
 
         _speech.listen(
           onResult: (val) => setState(() {
             _spokenText = val.recognizedWords;
           }),
-          localeId: finalLocale,
+          localeId: targetLocale,
+          pauseFor: const Duration(seconds: 3),
+          listenFor: const Duration(seconds: 30),
         );
       }
     } else {
