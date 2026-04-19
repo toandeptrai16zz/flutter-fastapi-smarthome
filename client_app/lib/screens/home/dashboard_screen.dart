@@ -201,6 +201,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       await _flutterTts.speak(result['reply']);
     } else {
       setState(() {
+        z
         _aiReply = "Xin lỗi, tổng đài AI đang bận.";
         _isProcessingAI = false;
       });

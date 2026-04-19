@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
-
+/// File thừa chưa dùng đến . chưa xóa chờ tái cấu trúc từ dashboard.dart
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
@@ -34,7 +34,7 @@ class SettingsScreen extends StatelessWidget {
                       shape: BoxShape.circle,
                       border: Border.all(color: AppColors.primary, width: 2),
                       image: const DecorationImage(
-                        image: NetworkImage("https://i.pravatar.cc/150?img=12"), // Ảnh avatar giả
+                        image: NetworkImage("https://i.pravatar.cc/150?img=12"), // Ảnh avatar giả, chưa cho hiển thị đang lỗi 
                         fit: BoxFit.cover,
                       ),
                     ),
@@ -43,7 +43,7 @@ class SettingsScreen extends StatelessWidget {
                   const Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text("Nguyễn Văn A", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                      Text("Nguyễn Văn A", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)), // Hiển thị tên user và email
                       Text("nguyenvana@aiot.vn", style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
                     ],
                   ),
