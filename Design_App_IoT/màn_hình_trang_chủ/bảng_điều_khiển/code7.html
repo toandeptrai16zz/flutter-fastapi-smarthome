@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AIoT Dashboard</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Theme Config -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#137fec",
+              "background-light": "#f6f7f8",
+              "background-dark": "#101922",
+              "card-dark": "#1c2127",
+              "card-border": "#3b4754",
+              "text-secondary": "#9dabb9",
+            },
+            fontFamily: {
+              "display": ["Space Grotesk", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        /* Hide scrollbar for Chrome, Safari and Opera */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        /* Hide scrollbar for IE, Edge and Firefox */
+        .no-scrollbar {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark text-[#111418] dark:text-white font-display min-h-screen relative pb-24 overflow-x-hidden selection:bg-primary selection:text-white">
+<!-- Header Section -->
+<header class="flex flex-col gap-2 p-5 pt-8">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="relative">
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 border-2 border-primary/20" data-alt="User profile picture of Alex" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBcZUBZw98IDpdTdUu3heoyU83IagHq0CmyF0L9U4-80Th6oUFS_-zARgzfMruSnoKUx-hBHnx8E95QUt6p3yni52hbvyNjxZutcI694ejcgn5wLtmOTzU-VhAKUsryW0KoXWByrSjzhTVghEjGBhCQWnN4SvIH23NT2FfJQ8CgdxMwfV7pH3CShkVjwwC_RylG9gEngSQ86aAVlLCTNHRo1fBehJfhJnAPrnlmy0WoFQlZufCmCo1qfCsTnNjU5m656NIKKcYvBQ");'>
+</div>
+<div class="absolute bottom-0 right-0 size-3 bg-green-500 rounded-full border-2 border-background-dark"></div>
+</div>
+<div>
+<p class="text-xs font-medium text-text-secondary uppercase tracking-wider">Welcome Home</p>
+<h1 class="text-xl font-bold leading-tight">Alex Johnson</h1>
+</div>
+</div>
+<button class="flex items-center justify-center size-10 rounded-full bg-card-dark border border-card-border text-primary hover:bg-primary hover:text-white transition-colors">
+<span class="material-symbols-outlined">add</span>
+</button>
+</div>
+</header>
+<!-- Quick Actions (Chips) -->
+<section class="flex gap-3 px-5 pb-2 overflow-x-auto no-scrollbar snap-x">
+<div class="flex h-10 shrink-0 items-center justify-center gap-x-2 rounded-full bg-primary text-white px-5 snap-start shadow-lg shadow-primary/20 cursor-pointer">
+<span class="material-symbols-outlined text-[20px]">home</span>
+<p class="text-sm font-bold leading-normal">Home</p>
+</div>
+<div class="flex h-10 shrink-0 items-center justify-center gap-x-2 rounded-full bg-white dark:bg-card-dark border border-slate-200 dark:border-card-border px-5 snap-start cursor-pointer hover:border-primary/50 transition-colors">
+<span class="material-symbols-outlined text-[20px] text-text-secondary">directions_run</span>
+<p class="text-slate-700 dark:text-white text-sm font-medium leading-normal">Leaving</p>
+</div>
+<div class="flex h-10 shrink-0 items-center justify-center gap-x-2 rounded-full bg-white dark:bg-card-dark border border-slate-200 dark:border-card-border px-5 snap-start cursor-pointer hover:border-primary/50 transition-colors">
+<span class="material-symbols-outlined text-[20px] text-text-secondary">bedtime</span>
+<p class="text-slate-700 dark:text-white text-sm font-medium leading-normal">Night</p>
+</div>
+<div class="flex h-10 shrink-0 items-center justify-center gap-x-2 rounded-full bg-white dark:bg-card-dark border border-slate-200 dark:border-card-border px-5 snap-start cursor-pointer hover:border-primary/50 transition-colors">
+<span class="material-symbols-outlined text-[20px] text-text-secondary">celebration</span>
+<p class="text-slate-700 dark:text-white text-sm font-medium leading-normal">Party</p>
+</div>
+</section>
+<!-- Environment Overview -->
+<section class="px-5 py-6">
+<h2 class="text-lg font-bold mb-4 flex items-center gap-2">
+            Environment
+            <span class="h-px flex-1 bg-slate-200 dark:bg-card-border ml-2"></span>
+</h2>
+<div class="flex flex-wrap gap-4">
+<!-- Temperature Card -->
+<div class="flex min-w-[150px] flex-1 flex-col gap-1 rounded-2xl p-5 bg-gradient-to-br from-white to-slate-50 dark:from-card-dark dark:to-[#151a1f] border border-slate-100 dark:border-card-border shadow-sm">
+<div class="flex justify-between items-start mb-2">
+<div class="p-2 bg-orange-500/10 rounded-lg text-orange-500">
+<span class="material-symbols-outlined">thermostat</span>
+</div>
+<span class="text-xs font-medium text-text-secondary bg-background-light dark:bg-background-dark px-2 py-1 rounded-full">Avg</span>
+</div>
+<p class="text-text-secondary text-sm font-medium leading-normal">Temperature</p>
+<p class="tracking-tight text-3xl font-bold leading-tight">24<span class="text-xl text-text-secondary">°C</span></p>
+</div>
+<!-- Humidity Card -->
+<div class="flex min-w-[150px] flex-1 flex-col gap-1 rounded-2xl p-5 bg-gradient-to-br from-white to-slate-50 dark:from-card-dark dark:to-[#151a1f] border border-slate-100 dark:border-card-border shadow-sm">
+<div class="flex justify-between items-start mb-2">
+<div class="p-2 bg-blue-500/10 rounded-lg text-blue-500">
+<span class="material-symbols-outlined">water_drop</span>
+</div>
+<span class="text-xs font-medium text-text-secondary bg-background-light dark:bg-background-dark px-2 py-1 rounded-full">Avg</span>
+</div>
+<p class="text-text-secondary text-sm font-medium leading-normal">Humidity</p>
+<p class="tracking-tight text-3xl font-bold leading-tight">45<span class="text-xl text-text-secondary">%</span></p>
+</div>
+</div>
+</section>
+<!-- Device Grid -->
+<section class="px-5">
+<div class="flex justify-between items-end mb-4">
+<h2 class="text-lg font-bold">My Devices</h2>
+<div class="text-xs font-medium text-text-secondary flex gap-2">
+<span class="flex items-center gap-1"><span class="size-2 rounded-full bg-green-500 inline-block"></span> 3 Active</span>
+<span class="flex items-center gap-1"><span class="size-2 rounded-full bg-gray-500 inline-block"></span> 1 Offline</span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<!-- Device 1: Smart AC -->
+<div class="group relative flex flex-col gap-3 rounded-2xl border border-slate-200 dark:border-card-border bg-white dark:bg-card-dark p-4 shadow-sm hover:border-primary/50 transition-all">
+<div class="flex justify-between items-start">
+<div class="size-10 rounded-full bg-background-light dark:bg-[#2c343e] flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">mode_fan</span>
+</div>
+<!-- Toggle Switch On -->
+<div class="w-10 h-6 bg-primary rounded-full relative cursor-pointer flex items-center px-1 justify-end">
+<div class="size-4 bg-white rounded-full shadow-md"></div>
+</div>
+</div>
+<div class="mt-2">
+<h3 class="text-base font-bold leading-tight text-slate-800 dark:text-white">Smart AC</h3>
+<p class="text-text-secondary text-xs font-medium mt-1">Living Room</p>
+</div>
+<div class="flex items-center gap-2 mt-1">
+<span class="text-sm font-bold text-primary">Cooling</span>
+<span class="size-1 bg-text-secondary rounded-full"></span>
+<span class="text-sm text-text-secondary">24°C</span>
+</div>
+</div>
+<!-- Device 2: Smart Light -->
+<div class="group relative flex flex-col gap-3 rounded-2xl border border-slate-200 dark:border-card-border bg-white dark:bg-card-dark p-4 shadow-sm hover:border-primary/50 transition-all">
+<div class="flex justify-between items-start">
+<div class="size-10 rounded-full bg-background-light dark:bg-[#2c343e] flex items-center justify-center text-yellow-400">
+<span class="material-symbols-outlined fill-1">lightbulb</span>
+</div>
+<!-- Toggle Switch On -->
+<div class="w-10 h-6 bg-primary rounded-full relative cursor-pointer flex items-center px-1 justify-end">
+<div class="size-4 bg-white rounded-full shadow-md"></div>
+</div>
+</div>
+<div class="mt-2">
+<h3 class="text-base font-bold leading-tight text-slate-800 dark:text-white">Smart Light</h3>
+<p class="text-text-secondary text-xs font-medium mt-1">Bedroom</p>
+</div>
+<div class="flex items-center gap-2 mt-1">
+<span class="text-sm font-bold text-primary">On</span>
+<span class="size-1 bg-text-secondary rounded-full"></span>
+<span class="text-sm text-text-secondary">80%</span>
+</div>
+</div>
+<!-- Device 3: Smart Lock -->
+<div class="group relative flex flex-col gap-3 rounded-2xl border border-slate-200 dark:border-card-border bg-white dark:bg-card-dark p-4 shadow-sm hover:border-primary/50 transition-all">
+<div class="flex justify-between items-start">
+<div class="size-10 rounded-full bg-background-light dark:bg-[#2c343e] flex items-center justify-center text-rose-500">
+<span class="material-symbols-outlined">lock</span>
+</div>
+<!-- Toggle Switch Off (Locked state treated as active toggle for locks usually, but let's show visual toggle) -->
+<div class="w-10 h-6 bg-primary rounded-full relative cursor-pointer flex items-center px-1 justify-end">
+<div class="size-4 bg-white rounded-full shadow-md"></div>
+</div>
+</div>
+<div class="mt-2">
+<h3 class="text-base font-bold leading-tight text-slate-800 dark:text-white">Front Door</h3>
+<p class="text-text-secondary text-xs font-medium mt-1">Entrance</p>
+</div>
+<div class="flex items-center gap-2 mt-1">
+<span class="text-sm font-bold text-text-secondary">Locked</span>
+<span class="size-1 bg-text-secondary rounded-full"></span>
+<span class="text-[10px] text-green-500 bg-green-500/10 px-1.5 py-0.5 rounded">90% Bat</span>
+</div>
+</div>
+<!-- Device 4: Sensor Hub (Offline) -->
+<div class="group relative flex flex-col gap-3 rounded-2xl border border-slate-200 dark:border-card-border bg-white dark:bg-card-dark p-4 shadow-sm opacity-70">
+<div class="flex justify-between items-start">
+<div class="size-10 rounded-full bg-background-light dark:bg-[#2c343e] flex items-center justify-center text-text-secondary">
+<span class="material-symbols-outlined">sensors_off</span>
+</div>
+<!-- Toggle Switch Off -->
+<div class="w-10 h-6 bg-slate-300 dark:bg-slate-600 rounded-full relative cursor-pointer flex items-center px-1">
+<div class="size-4 bg-white rounded-full shadow-md"></div>
+</div>
+</div>
+<div class="mt-2">
+<h3 class="text-base font-bold leading-tight text-slate-800 dark:text-white">Sensor Hub</h3>
+<p class="text-text-secondary text-xs font-medium mt-1">Kitchen</p>
+</div>
+<div class="flex items-center gap-2 mt-1">
+<span class="text-sm font-bold text-red-400">Offline</span>
+<span class="size-1 bg-text-secondary rounded-full"></span>
+<span class="text-sm text-text-secondary">--</span>
+</div>
+</div>
+<!-- Add Device Placeholder -->
+<div class="group relative flex flex-col gap-3 rounded-2xl border border-dashed border-slate-300 dark:border-card-border bg-transparent p-4 items-center justify-center min-h-[140px] cursor-pointer hover:bg-white/5 transition-colors">
+<div class="size-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">add</span>
+</div>
+<p class="text-sm font-medium text-primary">Add New Device</p>
+</div>
+</div>
+</section>
+<!-- Bottom Navigation -->
+<nav class="fixed bottom-0 left-0 w-full bg-white dark:bg-card-dark border-t border-slate-200 dark:border-card-border pb-6 pt-2 px-6 flex justify-between items-center z-50 rounded-t-2xl shadow-[0_-5px_15px_rgba(0,0,0,0.1)] dark:shadow-none">
+<a class="flex flex-col items-center gap-1 text-primary" href="#">
+<span class="material-symbols-outlined filled icon-filled">home</span>
+<span class="text-[10px] font-bold">Home</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-text-secondary hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined">smart_toy</span>
+<span class="text-[10px] font-medium">Automation</span>
+</a>
+<!-- Floating Action Button in Nav (Optional visual flair) -->
+<div class="relative -top-6">
+<div class="size-14 bg-primary rounded-full flex items-center justify-center shadow-lg shadow-primary/40 text-white cursor-pointer hover:scale-105 transition-transform">
+<span class="material-symbols-outlined text-[28px]">mic</span>
+</div>
+</div>
+<a class="flex flex-col items-center gap-1 text-text-secondary hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined">insert_chart</span>
+<span class="text-[10px] font-medium">Analytics</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-text-secondary hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="text-[10px] font-medium">Settings</span>
+</a>
+</nav>
+<!-- Simple CSS to handle specific filled state for icons if needed -->
+<style>
+        .material-symbols-outlined.icon-filled {
+          font-variation-settings:
+          'FILL' 1,
+          'wght' 400,
+          'GRAD' 0,
+          'opsz' 24
+        }
+    </style>
+</body></html>

@@ -64,6 +64,10 @@ Hệ thống đã chính thức nâng cấp lên phiên bản **AI 2.0** với c
 - [x] **Nhãn Pin thông minh:** Hiển thị nhãn D1, D2... ngay trên card thiết bị để dễ đối chiếu phần cứng.
 - [x] **Nút bấm vật lý đồng bộ 2 chiều:** Nhấn nút trên mạch ESP → App cập nhật trạng thái realtime qua MQTT + WebSocket.
 
+### 🎨 Thiết kế Giao diện (UI Design)
+- [x] **Trọn bộ Design System:** Đã hoàn thiện thiết kế cho toàn bộ các màn hình chính trong thư mục `Design_App_IoT`.
+- [x] **Phân loại màn hình:** Bao gồm Đăng nhập, Trang chủ, Điều khiển thiết bị, Quản lý lịch trình, Chia sẻ thiết bị và Cài đặt.
+
 ###  Tự Động Hóa & Lịch Trình (Smart Scheduling)
 - [x] **Hẹn giờ thông minh:** Tự động áp dụng chân Pin và logic Active Low (gạt lên tắt/xuống bật) cho từng lịch trình.
 - [x] **Đồng bộ UI realtime:** Khi lịch trình kích hoạt, App tự động cập nhật trạng thái qua WebSocket.
@@ -132,6 +136,7 @@ IoT_SmartHome_Project/
 ├── server_backend/                      #  Backend FastAPI
 ├── firmware_esp32/                      #  Firmware ESP8266 NodeMCU (Cảm biến + Relay)
 ├── firmware_esp32_cam/                  #  Firmware ESP32-CAM (Camera giám sát)
+├── Design_App_IoT/                      #  Thiết kế giao diện UI/UX (Screenshots/Designs)
 ├── doc/                                 #  Tài liệu dự án
 └── README.md                            #  File này
 ```

@@ -77,6 +77,7 @@ IoT_SmartHome_Project/
 ├── server_backend/      # Mã nguồn Backend FastAPI (Python)
 ├── firmware_esp32/      # Code cho Node chính (Sử dụng ESP8266)
 ├── firmware_esp32_cam/  # Code cho Node Camera (Sử dụng ESP32-CAM)
+├── Design_App_IoT/      # Bản vẽ thiết kế giao diện (UI Design)
 └── doc/                 # Tài liệu hướng dẫn và báo cáo
 ```
 
