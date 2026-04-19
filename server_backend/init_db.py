@@ -56,13 +56,35 @@ async def init():
         else:
             print(f"   ✔  Thiết bị '{device['device_id']}' đã tồn tại, bỏ qua.")
 
-    # ── 2. Collection: device_logs ──────────────────────────────────────────
+    # ── 2. Collection: users ──────────────────────────────────────────────
+    users_col = db["users"]
+    admin_email = "admin@smarthome.com"
+    existing_user = await users_col.find_one({"email": admin_email})
+    if not existing_user:
+        # Import trực tiếp bcrypt để tránh phụ thuộc phức tạp vào file app/core/security.py
+        import bcrypt
+        password = "admin123"
+        salt = bcrypt.gensalt()
+        hashed_password = bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
+        
+        await users_col.insert_one({
+            "email": admin_email,
+            "full_name": "Admin System",
+            "hashed_password": hashed_password,
+            "is_active": True,
+            "created_at": datetime.utcnow()
+        })
+        print(f"   ✓ Created default user: {admin_email} / {password}")
+    else:
+        print(f"   ✔  User '{admin_email}' đã tồn tại, bỏ qua.")
+
+    # ── 3. Collection: device_logs ──────────────────────────────────────────
     logs_col = db["device_logs"]
     # Index để query nhanh theo device_id và thời gian
     await logs_col.create_index([("device_id", 1), ("timestamp", -1)])
     print("✅ Index trên collection 'device_logs' đã sẵn sàng.")
 
-    # ── 3. Collection: sensors (mở rộng tương lai) ─────────────────────────
+    # ── 4. Collection: sensors (mở rộng tương lai) ─────────────────────────
     sensors_col = db["sensors"]
     await sensors_col.create_index([("device_id", 1), ("timestamp", -1)])
     print("✅ Index trên collection 'sensors' đã sẵn sàng.")
@@ -71,6 +93,7 @@ async def init():
     print("\n📦 Cấu trúc Database đã được khởi tạo:")
     print(f"   Database  : {DB_NAME}")
     print(f"   Collection: devices      — Trạng thái thiết bị")
+    print(f"   Collection: users        — Tài khoản người dùng")
     print(f"   Collection: device_logs  — Lịch sử bật/tắt")
     print(f"   Collection: sensors      — Dữ liệu cảm biến (mở rộng)")
 
