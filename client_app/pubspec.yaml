@@ -8,7 +8,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: '>=2.19.0 <3.0.0'
+  sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
   flutter:
@@ -19,7 +19,7 @@ dependencies:
   # For making HTTP requests to the backend server
 
   # For beautiful fonts
-  google_fonts: ^4.0.3
+  google_fonts: ^6.1.0
 
   # AI Voice Assistant
   speech_to_text: 6.5.0

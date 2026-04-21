@@ -3,6 +3,7 @@ import 'dart:async'; // Bổ sung thư viện cho Timer
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_theme.dart';
 import '../auth/login_screen.dart';
 import '../automation/schedule_screen.dart'; 
@@ -65,6 +66,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _spokenText = "";
   String _aiReply = "";
   bool _isProcessingAI = false;
+  String _targetLocaleId = "vi-VN"; // Mặc định
+  bool _speechInitialized = false;
 
   @override
   void initState() {
@@ -72,6 +75,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _speech = stt.SpeechToText();
     _flutterTts = FlutterTts();
     _initTts();
+    _initSpeech(); // Khởi tạo STT ngay từ đầu
     _loadUserInfo();
   }
 
@@ -84,62 +88,92 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _initTts() async {
-    await _flutterTts.setLanguage("vi-VN");
-    await _flutterTts.setSpeechRate(0.5);
-    await _flutterTts.setVolume(1.0);
-    await _flutterTts.setPitch(1.1); // Giọng trầm bổng nhẹ
+    try {
+      // Kiểm tra xem ngôn ngữ tiếng Việt có sẵn trên máy không
+      var isAvailable = await _flutterTts.isLanguageAvailable("vi-VN");
+      if (isAvailable) {
+        await _flutterTts.setLanguage("vi-VN");
+        await _flutterTts.setSpeechRate(0.5);
+        await _flutterTts.setVolume(1.0);
+        await _flutterTts.setPitch(1.0);
+        debugPrint("TTS: Tiếng Việt đã sẵn sàng");
+      } else {
+        debugPrint("TTS Error: Máy bạn chưa cài đặt gói Tiếng Việt");
+      }
+    } catch (e) {
+      debugPrint("TTS Init Error: $e");
+    }
   }
 
-  void _listen() async {
-    if (!_isListening) {
-      bool available = await _speech.initialize(
+  // Khởi tạo Speech Engine
+  Future<void> _initSpeech() async {
+    try {
+      _speechInitialized = await _speech.initialize(
+        debugLogging: false, 
         onStatus: (val) {
           if (val == 'done' || val == 'notListening') {
-            setState(() => _isListening = false);
-            if (_spokenText.isNotEmpty && !_isProcessingAI) {
+            if (mounted) setState(() => _isListening = false);
+            if (_spokenText.trim().isNotEmpty && !_isProcessingAI) {
               _processVoiceCommand(_spokenText);
             }
           }
         },
-        onError: (val) => setState(() => _isListening = false),
+        onError: (val) {
+          if (mounted) setState(() => _isListening = false);
+        },
       );
-      if (available) {
-        // Kiểm tra xem thiết bị có hỗ trợ tiếng Việt không
-        bool hasVietnamese = false;
+
+      if (_speechInitialized) {
+        var locales = await _speech.locales();
         try {
-          var locales = await _speech.locales();
-          hasVietnamese = locales.any(
-            (l) => l.localeId.toLowerCase().contains('vi'),
+          final viLocale = locales.firstWhere(
+            (l) => l.localeId == 'vi_VN' || l.localeId == 'vi-VN',
+            orElse: () => locales.firstWhere(
+              (l) => l.localeId.toLowerCase().contains('vi'),
+              orElse: () => locales.first
+            ),
           );
-        } catch (_) {}
+          _targetLocaleId = viLocale.localeId.replaceAll('_', '-');
+        } catch (e) {
+          _targetLocaleId = "vi-VN"; 
+        }
+        debugPrint("STT Ready - Using Locale: $_targetLocaleId");
+      }
+    } catch (e) {
+      debugPrint("STT Init Exception: $e");
+    }
+  }
+
+  void _listen() async {
+    if (!_isListening) {
+      // Nếu chưa khởi tạo thành công hoặc bị mất quyền, thử khởi tạo lại
+      if (!_speechInitialized) {
+        await _initSpeech();
+      }
+
+      if (_speechInitialized) {
+        // Kiểm tra lại nếu thiết bị có tiếng Việt (dành cho logic hiển thị thông báo)
+        var locales = await _speech.locales();
+        bool hasVietnamese = locales.any((l) => l.localeId.toLowerCase().contains('vi'));
 
         if (!hasVietnamese) {
-          // Hiển thị hướng dẫn cài gói tiếng Việt
           if (mounted) {
             showDialog(
               context: context,
               builder: (context) => AlertDialog(
                 backgroundColor: Colors.grey[900],
                 title: const Row(children: [
-                  Icon(Icons.mic_off, color: Colors.orange),
-                  SizedBox(width: 8),
-                  Text("Chưa có giọng tiếng Việt",
-                      style: TextStyle(color: Colors.white, fontSize: 16)),
+                   Icon(Icons.mic_off, color: Colors.orange),
+                   SizedBox(width: 8),
+                   Text("Thiếu gói Tiếng Việt", style: TextStyle(color: Colors.white, fontSize: 16)),
                 ]),
                 content: const Text(
-                  "Thiết bị chưa cài gói nhận dạng giọng nói tiếng Việt.\n\n"
-                  "Cách khắc phục:\n"
-                  "1. Vào Cài đặt → Quản lý chung → Ngôn ngữ\n"
-                  "2. Thêm Tiếng Việt vào danh sách\n"
-                  "3. Vào Google → Nhận dạng giọng nói → Tải về Tiếng Việt\n\n"
-                  "Trong lúc chờ, bạn có thể dùng nút MIC để GÕ LỆNH thay thế.",
-                  style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.6),
+                  "Thiết bị của bạn chưa cài gói nhận dạng giọng nói Tiếng Việt.\n\n"
+                  "Hãy kiểm tra cài đặt Google Speech Services.",
+                  style: TextStyle(color: Colors.white70, fontSize: 13),
                 ),
                 actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text("Đã hiểu", style: TextStyle(color: Colors.cyanAccent)),
-                  ),
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text("Đã hiểu")),
                 ],
               ),
             );
@@ -152,33 +186,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _spokenText = "";
           _aiReply = "";
         });
-        var locales = await _speech.locales();
-        debugPrint("STT Locales không định dạng @@");
-        for(var l in locales){
-          debugPrint("${l.localeId} - ${l.name}");
 
-        }
+        debugPrint("STT Listening with Locale: $_targetLocaleId");
 
-        String targetLocale = "vi-VN";
-        final viLocale = locales.firstWhere(
-          (l) => l.localeId.toLowerCase().contains('vi'),
-          orElse: () => locales.first, // fallback
-        );
-        targetLocale = viLocale.localeId; // dùng đúng ID thiết bị báo
-        debugPrint("=== Using locale: $targetLocale ===");
-
-        _speech.listen(
-          onResult: (val) => setState(() {
-            _spokenText = val.recognizedWords;
-          }),
-          localeId: targetLocale,
-          pauseFor: const Duration(seconds: 3),
+        // Bắt đầu lắng nghe với cấu hình ổn định nhất
+        await _speech.listen(
+          onResult: (val) {
+            if (mounted) {
+              setState(() {
+                _spokenText = val.recognizedWords;
+              });
+            }
+          },
+          localeId: _targetLocaleId,
+          onDevice: false, 
+          listenMode: stt.ListenMode.dictation, 
+          pauseFor: const Duration(seconds: 5),
           listenFor: const Duration(seconds: 30),
+          partialResults: true, 
+          cancelOnError: true,
         );
       }
     } else {
-      setState(() => _isListening = false);
-      _speech.stop();
+      if (mounted) setState(() => _isListening = false);
+      await _speech.stop();
     }
   }
 
@@ -198,10 +229,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _isProcessingAI = false;
         _spokenText = ""; // Reset text sau khi xong
       });
+      
+      // Dừng bất kỳ giọng nói nào đang phát trước khi nói câu mới
+      await _flutterTts.stop();
       await _flutterTts.speak(result['reply']);
     } else {
       setState(() {
-        z
+      
         _aiReply = "Xin lỗi, tổng đài AI đang bận.";
         _isProcessingAI = false;
       });
@@ -322,11 +356,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (_spokenText.isNotEmpty)
-              Text("Bạn: \"$_spokenText\"", style: TextStyle(color: themeColors.textSub, fontStyle: FontStyle.italic)),
+              Text("Bạn: \"$_spokenText\"", style: GoogleFonts.outfit(color: themeColors.textSub, fontStyle: FontStyle.italic)),
             if (_aiReply.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
-                child: Text("Nhà: $_aiReply", style: TextStyle(color: themeColors.primary, fontWeight: FontWeight.bold, fontSize: 16)),
+                child: Text("Nhà: $_aiReply", style: GoogleFonts.outfit(color: themeColors.primary, fontWeight: FontWeight.bold, fontSize: 16)),
               ),
             const SizedBox(height: 10),
             Align(

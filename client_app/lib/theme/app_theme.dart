@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 // 1. BẢNG MÀU TĨNH
 class AppColors {
@@ -46,23 +47,22 @@ class AppThemeColors {
   Color get primary => AppColors.primary;
 }
 
-// 3. CẤU HÌNH THEME DATA (Đây là cái biến main.dart đang tìm kiếm)
+// 3. CẤU HÌNH THEME DATA
 final ThemeData appDarkTheme = ThemeData(
   brightness: Brightness.dark,
   scaffoldBackgroundColor: AppColors.backgroundDark,
   primaryColor: AppColors.primary,
-  fontFamily: 'Roboto', 
+  textTheme: GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme),
   useMaterial3: true,
   colorScheme: const ColorScheme.dark(
     primary: AppColors.primary,
     surface: AppColors.surfaceDark,
-    background: AppColors.backgroundDark,
   ),
-  appBarTheme: const AppBarTheme(
+  appBarTheme: AppBarTheme(
     backgroundColor: AppColors.backgroundDark,
     elevation: 0,
     centerTitle: true,
-    titleTextStyle: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-    iconTheme: IconThemeData(color: Colors.white),
+    titleTextStyle: GoogleFonts.outfit(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+    iconTheme: const IconThemeData(color: Colors.white),
   ),
 );
