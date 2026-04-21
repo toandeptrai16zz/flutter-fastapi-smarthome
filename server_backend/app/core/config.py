@@ -12,6 +12,12 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
     JWT_SECRET_KEY: str = ""  # ✅ Thêm biến riêng cho JWT
 
+    # SMTP Config
+    SMTP_SERVER: str = "smtp.gmail.com"
+    SMTP_PORT: int = 465
+    SMTP_USER: str = ""
+    SMTP_PASS: str = ""
+
     # ESP32/NodeMCU Pin Pool (Mapping Label -> GPIO Number)
     ESP32_PIN_MAP: dict = {
         "D1 (GPIO 5) - Cảm biến DHT11": 5,

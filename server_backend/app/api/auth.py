@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks, status
 from app.models.user import UserCreate, UserLogin, SendOTPRequest
 from app.core.security import get_password_hash, verify_password, create_access_token
 from app.core.database import db
+from app.core.config import settings
 from datetime import datetime, timedelta
 import random
 import smtplib
@@ -9,23 +10,18 @@ from email.message import EmailMessage
 
 router = APIRouter()
 
-# --- CẤU HÌNH BẮN EMAIL NẾU BẠN MUỐN DÙNG THẬT ---
-# Thay thế bằng email và mật khẩu ứng dụng (App Password) thật của bạn
-SMTP_SERVER = "smtp.gmail.com"
-SMTP_PORT = 465
-SMTP_USER = "daynekchuong647@gmail.com"  # FIXME: Đổi email của bạn
-SMTP_PASS = "txolumiebdyzxqdb"      # FIXME: Đổi Mật khẩu ứng dụng của bạn
+# --- CẤU HÌNH BẮN EMAIL (Lấy từ .env) ---
 
 def send_email_sync(to_email: str, otp_code: str):
     try:
         msg = EmailMessage()
         msg.set_content(f"CHÀO MỪNG BẠN ĐẾN VỚI AIoT SMARTHOME\n\nMã xác thực (OTP) của bạn là: {otp_code}\nMã có hiệu lực trong 5 phút.\nTuyệt đối không chia sẻ mã này cho ai.")
         msg["Subject"] = "Mã xác thực đăng ký tài khoản AIoT SmartHome"
-        msg["From"] = SMTP_USER
+        msg["From"] = settings.SMTP_USER
         msg["To"] = to_email
 
-        with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
-            server.login(SMTP_USER, SMTP_PASS)
+        with smtplib.SMTP_SSL(settings.SMTP_SERVER, settings.SMTP_PORT) as server:
+            server.login(settings.SMTP_USER, settings.SMTP_PASS)
             server.send_message(msg)
         print(f"✅ Đã gửi email chứa mã {otp_code} tới {to_email}")
     except Exception as e:
